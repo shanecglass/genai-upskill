@@ -1,0 +1,6 @@
+google-cloud-aiplatform
+google-cloud-pubsub
+google-cloud-storage
+gunicorn
+mesop
+vertexai
