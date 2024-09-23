@@ -1,5 +1,4 @@
-## Pycache files
-**/__pycache__
-
 ## Virutal environments
 **/.venv
+
+.DS_Store
