@@ -16,18 +16,19 @@ ENV LANGUAGE en_US.UTF-8
 # install anything at container run time.
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-RUN mkdir /srv/app
+RUN mkdir ./srv/app
 
 # Create non-root user
 RUN groupadd -g 900 mesop && useradd -u 900 -s /bin/bash -g mesop mesop
 USER mesop
 
 # Copy local code to the container image.
-WORKDIR /srv/app
+WORKDIR /home/ubuntudocker/srv/app
 
 COPY main.py .
 COPY modules.py .
-COPY gemma.py .
+COPY model_calls.py .
+COPY ./model_mgmt /home/ubuntudocker/srv/app/model_mgmt
 
 
 # Service must listen to $PORT environment variable.

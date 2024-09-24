@@ -1,14 +1,15 @@
-import os
 import json
 
 from google.cloud import pubsub_v1
+from model_calls import config
 from vertexai.language_models import TextEmbeddingModel
 
-project_id = os.environ.get("PROJECT_ID")
-location = os.environ.get("LOCATION")
+project_id = config.project_id
+location = config.location
+tokenizer = config.model_to_call
 
-message_pubsub_topic_id = "projects/scg-l200-genai2/topics/chatbot_messages"
-reply_pubsub_topic_id = "projects/scg-l200-genai2/topics/chatbot_replies"
+message_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_messages"
+reply_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_replies"
 
 publisher = pubsub_v1.PublisherClient()
 message_topic_path = publisher.topic_path(project_id, message_pubsub_topic_id)
@@ -32,11 +33,14 @@ def publish_message_pubsub(
         message_count,
         session_id):
     message_embed = json.dumps(get_text_embeddings(message_text))
+    token_count = tokenizer.count_tokens(message_text)
     dict = {"message_text": message_text,
             "message_embedding": message_embed,
             "message_time": submit_time,
             "message_count": message_count,
             "session_id": session_id,
+            "token_count": token_count.total_tokens,
+            "total_billable_characters": token_count.total_billable_characters,
             }
     data_string = json.dumps(dict)
     data = data_string.encode("utf-8")
@@ -58,6 +62,7 @@ def publish_reply_pubsub(
             "reply_count": reply_count,
             "session_id": session_id,
             "response_time": float(time_to_reply),
+            "reply_model": config.Selected_Model,
             }
     data_string = json.dumps(dict)
     data = data_string.encode("utf-8")

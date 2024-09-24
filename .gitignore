@@ -1,4 +1,8 @@
-## Virutal environments
+## Development environments
 **/.venv
-**/__pycache__/**
+**/__pycache__
 .DS_Store
+.vscode
+
+
+**/token_test.py

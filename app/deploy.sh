@@ -5,12 +5,11 @@ PROJ_NUMBER=$(gcloud projects list \
 SERVICE_ACCOUNT="cloud-run-manager@scg-l200-genai2.iam.gserviceaccount.com"
 LOCATION="us-west1"
 IMG_TAG="gcr.io/$PROJ/travel-chatbot"
-SECRET_NAME="travelbot-endpoint-id"
 
-gcloud run deploy "travel-chatbot"  \
+gcloud run deploy "travel-chatbot-2"  \
     --project "$PROJ"    \
-    --set-env-vars "PROJECT_ID=$PROJ,LOCATION=$LOCATION,PROJECT_NUMBER=$PROJ_NUMBER"     \
-    --set-secrets "ENDPOINT_ID=projects/$PROJ_NUMBER/secrets/$SECRET_NAME:1"     \
+    --set-env-vars "LOCATION=$LOCATION, PROJECT_NUMBER=$PROJ_NUMBER, PROJECT_ID=$PROJ"     \
+    --set-secrets "ENDPOINT_ID=projects/$PROJ_NUMBER/secrets/travelbot-endpoint-id:1"     \
     --image "$IMG_TAG:latest"    \
     --platform "managed"  \
     --port 8080           \
