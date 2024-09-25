@@ -32,6 +32,8 @@ def publish_message_pubsub(
         submit_time,
         message_count,
         session_id):
+    message_text = message_text.replace("\n", " ").replace(
+        "  ", " ").replace("*", "").strip()
     message_embed = json.dumps(get_text_embeddings(message_text))
     token_count = tokenizer.count_tokens(message_text)
     dict = {"message_text": message_text,
@@ -54,7 +56,8 @@ def publish_reply_pubsub(
         reply_count,
         session_id,
         time_to_reply):
-    reply_text = reply_text.replace("\n", " ").replace("  ", " ").strip()
+    reply_text = reply_text.replace("\n", " ").replace(
+        "  ", " ").replace("*", "").strip()
     reply_embed = json.dumps(get_text_embeddings(reply_text))
     dict = {"reply_text": reply_text,
             "reply_embedding": reply_embed,
