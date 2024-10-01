@@ -1,3 +1,8 @@
+import debugpy
+
+debugpy.listen(5678)
+
+
 from dataclasses import dataclass
 from model_calls import ask_gemma, ask_gemini
 from model_mgmt import config

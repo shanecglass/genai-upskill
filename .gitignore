@@ -1,8 +1,10 @@
 ## Development environments
 **/.venv
+**/venv
 **/__pycache__
 .DS_Store
 .vscode
 
 
 **/token_test.py
+**/testing.py

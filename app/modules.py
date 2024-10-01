@@ -1,12 +1,29 @@
 import json
+import vertexai
 
 from google.cloud import pubsub_v1
 from model_mgmt import config
+from vertexai.generative_models import GenerativeModel
 from vertexai.language_models import TextEmbeddingModel
 
 project_id = config.project_id
 location = config.location
-tokenizer = config.model_to_call(config.Selected_Model)
+Selected_Model = config.Selected_Model
+
+
+def tokenizer(Selected_Model):
+    if Selected_Model == config.Valid_Models['GEMINI']:
+        tokenizer = config.model_to_call(config.Selected_Model[0])
+    if Selected_Model == config.Valid_Models['GEMINI_TUNED']:
+        vertexai.init(project=project_id, location=location)
+        tokenizer = GenerativeModel("gemini-1.5-pro-002")
+    else:
+        tokenizer = None
+
+    return (tokenizer)
+
+
+tokenizer = tokenizer(Selected_Model)
 
 message_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_messages"
 reply_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_replies"
@@ -35,15 +52,25 @@ def publish_message_pubsub(
     message_text = message_text.replace("\n", " ").replace(
         "  ", " ").replace("*", "").strip()
     message_embed = json.dumps(get_text_embeddings(message_text))
-    token_count = tokenizer.count_tokens(message_text)
-    dict = {"message_text": message_text,
-            "message_embedding": message_embed,
-            "message_time": submit_time,
-            "message_count": message_count,
-            "session_id": session_id,
-            "token_count": token_count.total_tokens,
-            "total_billable_characters": token_count.total_billable_characters,
-            }
+    if tokenizer is None:
+        dict = {"message_text": message_text,
+                "message_embedding": message_embed,
+                "message_time": submit_time,
+                "message_count": message_count,
+                "session_id": session_id,
+                "token_count": None,
+                "total_billable_characters": None,
+                }
+    else:
+        token_count = tokenizer.count_tokens(message_text)
+        dict = {"message_text": message_text,
+                "message_embedding": message_embed,
+                "message_time": submit_time,
+                "message_count": message_count,
+                "session_id": session_id,
+                "token_count": token_count.total_tokens,
+                "total_billable_characters": token_count.total_billable_characters,  # noqa --E501
+                }
     data_string = json.dumps(dict)
     data = data_string.encode("utf-8")
     future = publisher.publish(message_pubsub_topic_id, data)

@@ -8,9 +8,11 @@ import vertexai
 project_id = config.project_id
 location = config.location
 project_number = config.project_number
-endpoint_id = config.endpoint_id
 
-model_to_call = config.model_to_call(config.Selected_Model)
+model_configs = config.model_to_call(config.Selected_Model)
+model_to_call = model_configs[0]
+endpoint_id = model_configs[1]
+
 
 # flake8: noqa --E501
 

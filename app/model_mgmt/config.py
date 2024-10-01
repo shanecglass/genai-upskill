@@ -1,3 +1,9 @@
+import logging
+import os
+import model_mgmt.primary as primary
+import model_mgmt.instructions as instructions
+TESTING = False
+
 from google.cloud import aiplatform
 from vertexai.generative_models import (
     GenerationConfig,
@@ -9,10 +15,6 @@ from vertexai.generative_models import (
 )
 from enum import Enum
 
-import instructions
-import logging
-import os
-import primary
 import vertexai
 
 # flake8: noqa --E501
@@ -22,13 +24,8 @@ gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
 gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
 project_id = os.environ.get("PROJECT_ID")
 location = os.environ.get("LOCATION")
+
 configured_model = primary.configured_model
-# configured_model = "GEMINI_TUNED"
-
-# Changing this value will change the model used by the chat
-
-# Sets a default value for the chat to use in case an invalid select is made
-
 
 Valid_Models = {
     # Define the list of valid models.
@@ -39,7 +36,7 @@ Valid_Models = {
     "GEMINI_TUNED": "gemini_tuned",
 }
 
-
+# Sets a default value for the chat to use in case an invalid select is made
 default_model = Valid_Models["GEMINI"]
 
 
@@ -72,7 +69,7 @@ Selected_Model = model_check()
 
 
 def model_to_call(Selected_Model):
-    if Selected_Model == Valid_Models.GEMMA.value:
+    if Selected_Model == Valid_Models['GEMMA']:
         model_id = gemma_endpoint_id
         api_endpoint = f"{location}-aiplatform.googleapis.com"
         # The AI Platform services require regional API endpoints.
@@ -84,6 +81,7 @@ def model_to_call(Selected_Model):
         model_to_call = client.endpoint_path(
             project=project_number, location=location, endpoint=model_id
         )
+        endpoint_id = gemma_endpoint_id
     else:
         vertexai.init(project=project_id, location=location)
         tools = [
@@ -91,7 +89,7 @@ def model_to_call(Selected_Model):
                 google_search_retrieval=grounding.GoogleSearchRetrieval()
             ),
         ]
-        if Selected_Model == Valid_Models.GEMINI.value:
+        if Selected_Model == Valid_Models['GEMINI']:
             model_id = "gemini-flash-1.5-002"
         else:
             model_id = f"projects/{project_number}/locations/{location}/endpoints/{gemini_tuned_endpoint_id}"  # noqa --E501
@@ -100,7 +98,10 @@ def model_to_call(Selected_Model):
             system_instruction=instructions.system_instructions,
             tools=tools
         )
-    return model_to_call
+        endpoint_id = gemini_tuned_endpoint_id
+    return model_to_call, endpoint_id
+
+
 
 # if Selected_Model == Valid_Models.GEMINI.value:
 #     vertexai.init(project=project_id, location=location)
