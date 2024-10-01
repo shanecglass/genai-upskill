@@ -260,20 +260,18 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
 def respond_to_chat(input: str, history: list[ChatMessage]):
     # Assemble prompt from chat history
     # Assemble if selected model is Gemini
-    if Selected_Model == config.Valid_Models.GEMINI.value:
+    if Selected_Model == config.Valid_Models["GEMMA"]:
+        full_input = ""
+        for h in history:
+            full_input += "<start_of_turn>{role}\n{content}<end_of_turn>\n".format(
+                role=h.role, content=h.content)
+        full_input += "<start_of_turn>model\n"
+        result = ask_gemma(full_input)
+    # Assemble if selected model is Gemini Tuned or Gemini
+    else:
         chat_history = "\n".join(message.content for message in history)
         full_input = f"{chat_history}\n{input}"
         result = ask_gemini(full_input)
-
-        # Assemble if selected model is Gemma
-        if Selected_Model == config.Valid_Models.GEMMA.value:
-            full_input = ""
-            for h in history:
-                full_input += "<start_of_turn>{role}\n{content}<end_of_turn>\n".format(
-                    role=h.role, content=h.content)
-            full_input += "<start_of_turn>model\n"
-            result = ask_gemma(full_input)
-
         # else:
         #     logging.info(Selected_Model)
         #     logging.info(f"Is model gemini? {

@@ -1,12 +1,12 @@
 import json
 
 from google.cloud import pubsub_v1
-from model_calls import config
+from model_mgmt import config
 from vertexai.language_models import TextEmbeddingModel
 
 project_id = config.project_id
 location = config.location
-tokenizer = config.model_to_call
+tokenizer = config.model_to_call(config.Selected_Model)
 
 message_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_messages"
 reply_pubsub_topic_id = f"projects/{project_id}/topics/chatbot_replies"

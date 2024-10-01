@@ -1,4 +1,4 @@
-from model_mgmt import config, prompt
+from model_mgmt import config, instructions, prompt
 from google.cloud import aiplatform
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
@@ -9,7 +9,8 @@ project_id = config.project_id
 location = config.location
 project_number = config.project_number
 endpoint_id = config.endpoint_id
-model_to_call = config.model_to_call
+
+model_to_call = config.model_to_call(config.Selected_Model)
 
 # flake8: noqa --E501
 
@@ -18,7 +19,7 @@ def ask_gemma(
     user_input: str,
 ):
     system_instructions = ""
-    for instruction in config.system_instructions:
+    for instruction in instructions.system_instructions:
         system_instructions += instruction + " "
     complete_prompt = f"""
         Instructions: {system_instructions}
