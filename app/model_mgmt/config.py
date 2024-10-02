@@ -31,9 +31,9 @@ Valid_Models = {
     # Define the list of valid models.
     # This is used to check if the selected model defined above is valid
     # Only change this if you have added support for a new model
-    "GEMINI": "gemini",
-    "GEMMA": "gemma",
-    "GEMINI_TUNED": "gemini_tuned",
+    "GEMINI": "gemini-flash-1.5-002",
+    "GEMMA": "gemma2-9b-it",
+    "GEMINI_TUNED": "gemini-pro-1.5-002-tuned",
 }
 
 # Sets a default value for the chat to use in case an invalid select is made
@@ -90,9 +90,10 @@ def model_to_call(Selected_Model):
             ),
         ]
         if Selected_Model == Valid_Models['GEMINI']:
-            model_id = "gemini-flash-1.5-002"
+            model_id = Selected_Model
         else:
             model_id = f"projects/{project_number}/locations/{location}/endpoints/{gemini_tuned_endpoint_id}"  # noqa --E501
+
         model_to_call = GenerativeModel(
             model_name=model_id,
             system_instruction=instructions.system_instructions,
@@ -100,40 +101,6 @@ def model_to_call(Selected_Model):
         )
         endpoint_id = gemini_tuned_endpoint_id
     return model_to_call, endpoint_id
-
-
-
-# if Selected_Model == Valid_Models.GEMINI.value:
-#     vertexai.init(project=project_id, location=location)
-#     model_id = "gemini-flash-1.5-002"
-
-#     model_to_call = GenerativeModel(
-#         model_name=model_id,
-#         system_instruction=instructions,
-#         tools=tools
-#     )
-
-#     if Selected_Model == Valid_Models.GEMINI_TUNED.value:
-#         model_id = f"projects/{project_number}/locations/{
-#             location}/endpoints/{gemini_tuned_endpoint_id}"
-#         model_to_call = GenerativeModel(
-#             model_name=model_id,
-#             system_instruction=instructions,
-#             tools=tools
-#         )
-
-# if Selected_Model == Valid_Models.GEMMA.value:
-#     model_id = gemma_endpoint_id
-#     api_endpoint = f"{location}-aiplatform.googleapis.com"
-#     # The AI Platform services require regional API endpoints.
-#     client_options = {"api_endpoint": api_endpoint}
-#     # Initialize client that will be used to create and send requests.
-#     # This client only needs to be created once, and can be reused for multiple requests.
-#     client = aiplatform.gapic.PredictionServiceClient(
-#         client_options=client_options)
-#     model_to_call = client.endpoint_path(
-#         project=project_number, location=location, endpoint=model_id
-#     )
 
 generation_config = GenerationConfig(
     temperature=0.1,
