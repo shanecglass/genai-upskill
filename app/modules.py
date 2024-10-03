@@ -92,7 +92,7 @@ def publish_reply_pubsub(
             "reply_count": reply_count,
             "session_id": session_id,
             "response_time": float(time_to_reply),
-            "reply_model": config.Selected_Model,
+            "reply_model": Selected_Model,
             }
     data_string = json.dumps(dict)
     data = data_string.encode("utf-8")

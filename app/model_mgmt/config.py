@@ -31,13 +31,13 @@ Valid_Models = {
     # Define the list of valid models.
     # This is used to check if the selected model defined above is valid
     # Only change this if you have added support for a new model
-    "GEMINI": "gemini-flash-1.5-002",
+    "GEMINI_FLASH": "gemini-1.5-flash-002",
     "GEMMA": "gemma2-9b-it",
-    "GEMINI_TUNED": "gemini-pro-1.5-002-tuned",
+    "GEMINI_PRO_TUNED": "gemini-1.0-pro-002_tuned",
 }
 
 # Sets a default value for the chat to use in case an invalid select is made
-default_model = Valid_Models["GEMINI"]
+default_model = Valid_Models["GEMINI_FLASH"]
 
 
 def model_check(
@@ -89,7 +89,7 @@ def model_to_call(Selected_Model):
                 google_search_retrieval=grounding.GoogleSearchRetrieval()
             ),
         ]
-        if Selected_Model == Valid_Models['GEMINI']:
+        if Selected_Model == Valid_Models['GEMINI_FLASH']:
             model_id = Selected_Model
         else:
             model_id = f"projects/{project_number}/locations/{location}/endpoints/{gemini_tuned_endpoint_id}"  # noqa --E501
@@ -100,7 +100,7 @@ def model_to_call(Selected_Model):
             tools=tools
         )
         endpoint_id = gemini_tuned_endpoint_id
-    return model_to_call, endpoint_id
+    return model_to_call, endpoint_id, tools
 
 generation_config = GenerationConfig(
     temperature=0.1,
