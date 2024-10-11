@@ -12,9 +12,9 @@ Selected_Model = config.Selected_Model
 
 
 def tokenizer(Selected_Model):
-    if Selected_Model == config.Valid_Models['GEMINI']:
+    if Selected_Model == config.Valid_Models['GEMINI_FLASH']:
         tokenizer = config.model_to_call(config.Selected_Model[0])
-    if Selected_Model == config.Valid_Models['GEMINI_TUNED']:
+    if Selected_Model == config.Valid_Models['GEMINI_PRO_TUNED']:
         vertexai.init(project=project_id, location=location)
         tokenizer = GenerativeModel("gemini-1.5-pro-002")
     else:

@@ -1,13 +1,13 @@
-import debugpy
-
-debugpy.listen(5678)
-
-
 from dataclasses import dataclass
+from langchain_core.messages import AIMessage, ChatMessage, HumanMessage, SystemMessage
+from langgraph.graph.message import add_messages
 from model_calls import ask_gemma, ask_gemini
-from model_mgmt import config
-from typing import Literal
+from model_mgmt import config, toolkit, instructions
+from operator import add
+from typing import Annotated, Literal, TypedDict, Callable, Generator, Literal
+from vertexai.generative_models import Content, Part
 
+import agent
 import datetime
 import logging
 import mesop as me
@@ -18,9 +18,14 @@ import uuid
 
 # flake8: noqa --E501
 
+
 Role = Literal["user", "assistant"]
 Selected_Model = config.Selected_Model
-
+model_configs = config.model_to_call(Selected_Model)
+generative_model = model_configs[0]
+endpoint_id = model_configs[1]
+tool_node = toolkit.tool_node
+session_id = str(uuid.uuid4())
 
 @dataclass(kw_only=True)
 class ChatMessage:
@@ -36,55 +41,39 @@ class State:
     input: str
     output: list[ChatMessage]
     in_progress: bool
-    rewrite: str
-    rewrite_message_index: int
-    preview_rewrite: str
-    preview_original: str
-    modal_open: bool
     message_count: int = 0
     reply_count: int = 0
-    session_id: str = str(uuid.uuid4())
+    session_id: str = session_id
+
+
+class Chat_State(TypedDict):
+    # Messages have the type "list". The `add_messages` function
+    # in the annotation defines how this state key should be updated
+    # (in this case, it appends messages to the list, rather than overwriting them)
+    # session: str = session_id
+    messages: Annotated[list, add_messages]
+
+
+def load(e: me.LoadEvent):
+    me.set_theme_mode("system")
 
 
 @me.page(
+    on_load=load,
     security_policy=me.SecurityPolicy(
-        dangerously_disable_trusted_types=True
+        allowed_iframe_parents=["https://google.github.io"]
     ),
     path="/",
-    title="Travel Chat",
+    title="TravelChat",
 )
+
+
 def page():
     state = me.state(State)
-
-    # Modal
-    with me.box(style=_make_modal_background_style(state.modal_open)):
-        with me.box(style=_STYLE_MODAL_CONTAINER):
-            with me.box(style=_STYLE_MODAL_CONTENT):
-                me.textarea(
-                    label="Rewrite",
-                    style=_STYLE_INPUT_WIDTH,
-                    value=state.rewrite,
-                    on_input=on_rewrite_input,
-                )
-                with me.box():
-                    me.button(
-                        "Submit Rewrite",
-                        color="primary",
-                        type="flat",
-                        on_click=on_click_submit_rewrite,
-                    )
-                    me.button(
-                        "Cancel",
-                        on_click=on_click_cancel_rewrite,
-                    )
-                with me.box(style=_STYLE_PREVIEW_CONTAINER):
-                    with me.box(style=_STYLE_PREVIEW_ORIGINAL):
-                        me.text("Original Message", type="headline-6")
-                        me.markdown(state.preview_original)
-
-                    with me.box(style=_STYLE_PREVIEW_REWRITE):
-                        me.text("Preview Rewrite", type="headline-6")
-                        me.markdown(state.preview_rewrite)
+    global chat_session
+    chat_session = config.chat_session
+    global app
+    app = agent.create_graph(Chat_State)
 
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
@@ -92,9 +81,8 @@ def page():
         with me.box(style=_STYLE_CHAT_BOX):
             for index, msg in enumerate(state.output):
                 with me.box(
-                        style=_make_style_chat_bubble_wrapper(msg.role),
-                        key=f"msg-{index}",
-                        on_click=on_click_rewrite_msg,
+                    style=_make_style_chat_bubble_wrapper(msg.role),
+                    key=f"msg-{index}",
                 ):
                     if msg.role == _ROLE_ASSISTANT:
                         me.text(
@@ -103,15 +91,14 @@ def page():
                         )
                     with me.box(style=_make_chat_bubble_style(msg.role, msg.edited)):
                         if msg.role == _ROLE_USER:
-                            me.text(msg.content,
-                                    style=_STYLE_CHAT_BUBBLE_PLAINTEXT)
+                            me.text(msg.content, style=_STYLE_CHAT_BUBBLE_PLAINTEXT)
                         else:
                             me.markdown(msg.content)
                             with me.tooltip(message="Rewrite response"):
                                 me.icon(icon="edit_note")
 
             if state.in_progress:
-                with me.box(key="scroll-to", style=me.Style(height=300)):
+                with me.box(key="scroll-to", style=me.Style(height=250)):
                     pass
         with me.box(style=_STYLE_CHAT_INPUT_BOX):
             with me.box(style=me.Style(flex_grow=1)):
@@ -124,19 +111,16 @@ def page():
                     style=_STYLE_CHAT_INPUT,
                 )
             with me.content_button(
-                    color="primary",
-                    type="flat",
-                    disabled=state.in_progress,
-                    on_click=on_click_submit_chat_msg,
-                    style=_STYLE_CHAT_BUTTON,
+                color="primary",
+                type="flat",
+                disabled=state.in_progress,
+                on_click=on_click_submit_chat_msg,
+                style=_STYLE_CHAT_BUTTON,
             ):
                 me.icon(
                     _LABEL_BUTTON_IN_PROGRESS if state.in_progress else _LABEL_BUTTON
                 )
-
-
 # Event Handlers
-
 
 def on_chat_input(e: me.InputEvent):
     """Capture chat text input."""
@@ -144,68 +128,14 @@ def on_chat_input(e: me.InputEvent):
     state.input = e.value
 
 
-def on_rewrite_input(e: me.InputEvent):
-    """Capture rewrite text input."""
-    state = me.state(State)
-    state.preview_rewrite = e.value
-    logging.info(f"Text rewrite provided by user as input: {
-                 state.preview_rewrite}")
-
-
-def on_click_rewrite_msg(e: me.ClickEvent):
-    """Shows rewrite modal when a message is clicked.
-
-    Edit this function to persist rewritten messages.
-    """
-    state = me.state(State)
-    index = int(e.key.replace("msg-", ""))
-    message = state.output[index]
-    if message.role == _ROLE_USER or state.in_progress:
-        return
-    state.modal_open = True
-    state.rewrite = message.content
-    state.rewrite_message_index = index
-    state.preview_original = message.content
-    state.preview_rewrite = message.content
-    logging.info(f"User opened write modal for message: {
-                 state.preview_original}")
-    logging.info(f"Rewrite suggested to user is: {state.preview_rewrite}")
-
-
-def on_click_submit_rewrite(e: me.ClickEvent):
-    """Submits rewrite message."""
-    state = me.state(State)
-    state.modal_open = False
-    message = state.output[state.rewrite_message_index]
-    if message.content != state.preview_rewrite:
-        message.content = state.preview_rewrite
-        message.edited = True
-    state.rewrite_message_index = 0
-    state.rewrite = ""
-    state.preview_original = ""
-    state.preview_rewrite = ""
-    logging.info(f"Text rewrite submitted by user as input: {state.message}")
-
-
-def on_click_cancel_rewrite(e: me.ClickEvent):
-    """Hides rewrite modal."""
-    state = me.state(State)
-    state.modal_open = False
-    logging.info("User closed rewrite modal")
-    state.rewrite_message_index = 0
-    state.rewrite = ""
-    state.preview_original = ""
-    state.preview_rewrite = ""
-
-
 def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
-    """Handles submitting a chat message."""
     state = me.state(State)
     if state.in_progress or not state.input:
-        return
+      return
     input = state.input
     state.input = ""
     yield
+
     submit_time = time.time()
     submit_time_bq_format = submit_time*pow(10, 6)
     submit_time_human = datetime.datetime.fromtimestamp(submit_time)
@@ -219,13 +149,10 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
 
     output = state.output
     if output is None:
-        output = []
+      output = []
     output.append(ChatMessage(role=_ROLE_USER, content=input))
     state.in_progress = True
-    yield
-
     me.scroll_into_view(key="scroll-to")
-    time.sleep(0.15)
     yield
 
     start_time = time.time()
@@ -233,87 +160,98 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     assistant_message = ChatMessage(role=_ROLE_ASSISTANT)
     output.append(assistant_message)
     state.output = output
-    response_capture_logging = ""
-    for content in output_message:
-        assistant_message.content += content
-        response_capture_logging += content
-        # TODO: 0.25 is an abitrary choice. In the future, consider making this adjustable.
-        if (time.time() - start_time) >= .25:
-            start_time = time.time()
-            yield
 
-    state.in_progress = False
-    yield
     state.reply_count = state.reply_count + 1
     reply_time = time.time()
     response_time = reply_time - submit_time
     reply_time_bq_format = submit_time*pow(10, 6)
     reply_time_human = datetime.datetime.fromtimestamp(reply_time)
-
-    logging.info(f"Model message sent as: {
-                 response_capture_logging} at time: {reply_time_human}")
+    logging.info(f"Model PubSub message sent as: {
+                output_message} at time: {reply_time_human}")
     logging.info(f"Response time in seconds: {response_time}")
     modules.publish_reply_pubsub(
-        response_capture_logging, reply_time_bq_format, state.reply_count, state.session_id, response_time)
+        output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
     logging.info(f"PubSub message for reply successfully sent for message {
-                 state.reply_count} in session {state.session_id}")
+                        state.reply_count} in session {state.session_id}")
 
+
+    for content in output_message:
+      assistant_message.content += content
+      # TODO: 0.25 is an abitrary choice. In the future, consider making this adjustable.
+      if (time.time() - start_time) >= 25:
+        start_time = time.time()
+    yield output_message
+    state.in_progress = False
+    yield
 
 # Transform function for processing chat messages.
 
-
 def respond_to_chat(input: str, history: list[ChatMessage]):
+    state = me.state(State)
+    # state = Agent_State
+
     # Assemble prompt from chat history
     # Assemble if selected model is Gemini
     if Selected_Model == config.Valid_Models["GEMMA"]:
-        full_input = ""
-        for h in history:
-            full_input += "<start_of_turn>{role}\n{content}<end_of_turn>\n".format(
-                role=h.role, content=h.content)
-        full_input += "<start_of_turn>model\n"
-        result = ask_gemma(full_input)
+        result = ask_gemma(input)
+        return result
     # Assemble if selected model is Gemini Tuned or Gemini
     else:
-        chat_history = "\n".join(message.content for message in history)
-        full_input = f"{chat_history}\n{input}"
-        result = ask_gemini(full_input)
-        # else:
-        #     logging.info(Selected_Model)
-        #     logging.info(f"Is model gemini? {
-        #                  Selected_Model == config.Valid_Models.GEMINI.value}")
-        #     logging.info(f"Is model Gemma? {
-        #                  Selected_Model == config.Valid_Models.GEMMA.value}")
+        if (state.message_count == 1, state.reply_count==0):
+            system_message = ""
+            chat_session.invoke(Content(role="system", parts=[Part.from_text(instructions.system_instructions)]))
+            for x in instructions.system_instructions:
+                system_message += x.replace("\n", " ")
 
-        #     result = "Uh oh... I don't have a valid model to talk to. Quick, call the dev for help!"
+            input_message = {"messages": [HumanMessage(content=input)]}
+        else:
+            input_message = {"messages": [HumanMessage(content=input)]}
 
-    yield result
+        input_config = {"configurable": {"thread_id": session_id}}
+
+        response = app.invoke(input_message, input_config)
+        result = response["messages"][-1].content
+        logging.info(f'Response to {input}: {result}')
+        print(type(result))
+
+        if type(result) is str:
+            result = result
+            return result
+        else:
+            try:
+                result = str(result)
+                return result
+            except TypeError:
+                logging.info(f"Type Error occurred on final output to chat. {TypeError}")
+                return("Uh, that didn't go well. Try again!")
+
 
 # Constants
-
 
 _TITLE = "TravelChat"
 
 _ROLE_USER = "user"
 _ROLE_ASSISTANT = "assistant"
+_ROLE_SYSTEM = "system"
 
-_BOT_USER_DEFAULT = "travel-bot"
+_BOT_USER_DEFAULT = "travelchat-bot"
 
 
 # Styles
 
-_COLOR_BACKGROUND = "#fff"
-_COLOR_CHAT_BUBBLE_YOU = "#f2f2f2"
-_COLOR_CHAT_BUBBLE_BOT = "#ebf3ff"
-_COLOR_CHAT_BUUBBLE_EDITED = "#f2ebff"
+_COLOR_BACKGROUND = me.theme_var("background")
+_COLOR_CHAT_BUBBLE_YOU = me.theme_var("surface-container-low")
+_COLOR_CHAT_BUBBLE_BOT = me.theme_var("secondary-container")
+_COLOR_CHAT_BUUBBLE_EDITED = me.theme_var("tertiary-container")
 
 _DEFAULT_PADDING = me.Padding.all(20)
 _DEFAULT_BORDER_SIDE = me.BorderSide(
-    width="1px", style="solid", color="#ececec"
+    width="1px", style="solid", color=me.theme_var("secondary-fixed")
 )
 
 _LABEL_BUTTON = "send"
 _LABEL_BUTTON_IN_PROGRESS = "pending"
-_LABEL_INPUT = "Where can we help you go?"
+_LABEL_INPUT = "Enter your prompt"
 
 _STYLE_INPUT_WIDTH = me.Style(width="100%")
 
@@ -351,18 +289,16 @@ _STYLE_CHAT_BUBBLE_NAME = me.Style(
     font_size="12px",
     padding=me.Padding(left=15, right=15, bottom=5),
 )
-_STYLE_CHAT_BUBBLE_PLAINTEXT = me.Style(
-    margin=me.Margin.symmetric(vertical=15))
+_STYLE_CHAT_BUBBLE_PLAINTEXT = me.Style(margin=me.Margin.symmetric(vertical=15))
 
 _STYLE_MODAL_CONTAINER = me.Style(
-    background="#fff",
+    background=me.theme_var("surface-container"),
     margin=me.Margin.symmetric(vertical="0", horizontal="auto"),
     width="min(1024px, 100%)",
     box_sizing="content-box",
     height="100%",
     overflow_y="scroll",
-    box_shadow=(
-        "0 3px 1px -2px #0003, 0 2px 2px #00000024, 0 1px 5px #0000001f"),
+    box_shadow=("0 3px 1px -2px #0003, 0 2px 2px #00000024, 0 1px 5px #0000001f"),
 )
 
 _STYLE_MODAL_CONTENT = me.Style(margin=me.Margin.all(20))
@@ -372,7 +308,9 @@ _STYLE_PREVIEW_CONTAINER = me.Style(
     grid_template_columns="repeat(2, 1fr)",
 )
 
-_STYLE_PREVIEW_ORIGINAL = me.Style(color="#777", padding=_DEFAULT_PADDING)
+_STYLE_PREVIEW_ORIGINAL = me.Style(
+    color=me.theme_var("on-surface"), padding=_DEFAULT_PADDING
+)
 
 _STYLE_PREVIEW_REWRITE = me.Style(
     background=_COLOR_CHAT_BUUBBLE_EDITED, padding=_DEFAULT_PADDING
@@ -420,25 +358,6 @@ def _make_chat_bubble_style(role: Role, edited: bool) -> me.Style:
             bottom=_DEFAULT_BORDER_SIDE,
         ),
     )
-
-
-def _make_modal_background_style(modal_open: bool) -> me.Style:
-    """Makes style for modal background.
-
-    Args:
-        modal_open: Whether the modal is open.
-    """
-    return me.Style(
-        display="block" if modal_open else "none",
-        position="fixed",
-        z_index=1000,
-        width="100%",
-        height="100%",
-        overflow_x="auto",
-        overflow_y="auto",
-        background="rgba(0,0,0,0.4)",
-    )
-
 
 def _display_username(username: str, edited: bool = False) -> str:
     """Displays the username

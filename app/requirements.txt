@@ -1,7 +1,11 @@
+bigframes
 google-cloud-aiplatform
 google-cloud-pubsub
 google-cloud-storage
 gunicorn
+json-repair
+langchain
+langgraph
+langchain_google_vertexai
 mesop
 vertexai
-debugpy

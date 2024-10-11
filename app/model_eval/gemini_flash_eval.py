@@ -7,9 +7,7 @@ import openai
 from vertexai.evaluation import (
     EvalTask,
     MetricPromptTemplateExamples,
-    PairwiseMetric,
-    PointwiseMetric,
-    PointwiseMetricPromptTemplate,
+    PointwiseMetric
 )
 
 from vertexai.generative_models import GenerativeModel
