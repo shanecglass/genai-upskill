@@ -2,7 +2,7 @@
 from model_mgmt import toolkit
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, START, StateGraph, MessagesState
-from model_mgmt import config
+from model_mgmt import config, prompt
 from typing import Literal
 
 # flake8: noqa --E501
@@ -11,6 +11,7 @@ from typing import Literal
 tool_node = toolkit.tool_node
 model_configs = config.model_to_call()
 generative_model = model_configs[0]
+
 
 
 def should_continue(state: MessagesState) -> Literal["tools", END]:
@@ -28,11 +29,9 @@ def should_continue(state: MessagesState) -> Literal["tools", END]:
 
 
 def call_model(state: MessagesState):
-    chat_session = config.chat_session
     input_message = state['messages'][-1].content
-    # for i in range(0, len(messages)):
-    #     messages_content.append(messages[i].content)
-    response = chat_session.invoke(input_message)
+    chat_session = config.chat_session
+    response = chat_session.invoke(f"{prompt.template} {input_message}")
     # We return a list, because this will get added to the existing list
     return {"messages": [response]}
 

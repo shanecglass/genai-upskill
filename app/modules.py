@@ -13,7 +13,7 @@ Selected_Model = config.Selected_Model
 
 def tokenizer(Selected_Model):
     if Selected_Model == config.Valid_Models['GEMINI_FLASH']:
-        tokenizer = config.model_to_call(config.Selected_Model[0])
+        tokenizer = config.generative_model
     if Selected_Model == config.Valid_Models['GEMINI_PRO_TUNED']:
         vertexai.init(project=project_id, location=location)
         tokenizer = GenerativeModel("gemini-1.5-pro-002")
@@ -37,11 +37,11 @@ reply_topic_path = publisher.topic_path(
 def get_text_embeddings(text_input):
     text_embed_model = TextEmbeddingModel.from_pretrained(
         "textembedding-gecko@003")
-    text_embeddings = text_embed_model.get_embeddings([text_input])
+    # text_embeddings = text_embed_model.get_embeddings([text_input])
     text_embeddings = text_embed_model.get_embeddings([text_input])
     for embedding in text_embeddings:
         vector = embedding.values
-        return vector
+    return vector
 
 
 def publish_message_pubsub(

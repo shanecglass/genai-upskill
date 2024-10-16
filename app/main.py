@@ -1,20 +1,25 @@
 from dataclasses import dataclass
 from langchain_core.messages import AIMessage, ChatMessage, HumanMessage, SystemMessage
+from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph.message import add_messages
-from model_calls import ask_gemma, ask_gemini
-from model_mgmt import config, toolkit, instructions
+from model_calls import ask_gemma, function_coordination
+from model_mgmt import config, toolkit
 from operator import add
 from typing import Annotated, Literal, TypedDict, Callable, Generator, Literal
-from vertexai.generative_models import Content, Part
+# from vertexai.generative_models import ChatSession
 
-import agent
 import datetime
+
 import logging
 import mesop as me
 import mesop.labs as mel
-import modules
 import time
 import uuid
+import vertexai
+import debugpy
+
+debugpy.listen(5678)
+
 
 # flake8: noqa --E501
 
@@ -24,7 +29,7 @@ Selected_Model = config.Selected_Model
 model_configs = config.model_to_call(Selected_Model)
 generative_model = model_configs[0]
 endpoint_id = model_configs[1]
-tool_node = toolkit.tool_node
+# tool_node = toolkit.tool_node
 session_id = str(uuid.uuid4())
 
 @dataclass(kw_only=True)
@@ -45,23 +50,28 @@ class State:
     reply_count: int = 0
     session_id: str = session_id
 
-
-class Chat_State(TypedDict):
-    # Messages have the type "list". The `add_messages` function
-    # in the annotation defines how this state key should be updated
-    # (in this case, it appends messages to the list, rather than overwriting them)
-    # session: str = session_id
-    messages: Annotated[list, add_messages]
+# class Chat_State(TypedDict):
+#     # Messages have the type "list". The `add_messages` function
+#     # in the annotation defines how this state key should be updated
+#     # (in this case, it appends messages to the list, rather than overwriting them)
+#     # session: str = session_id
+#     messages: Annotated[list, add_messages]
+#     chat_session: ChatVertexAI = config.chat_session
 
 
 def load(e: me.LoadEvent):
-    me.set_theme_mode("system")
-
+    me.set_theme_mode("dark")
+    vertexai.init(project=config.project_id, location=config.location)
+    # global chat_session
+    # chat_session = config.start_chat(generative_model)
+    yield
 
 @me.page(
     on_load=load,
     security_policy=me.SecurityPolicy(
-        allowed_iframe_parents=["https://google.github.io"]
+        allowed_iframe_parents=[
+            "https://google.github.io", "https://huggingface.co"],
+        dangerously_disable_trusted_types=True
     ),
     path="/",
     title="TravelChat",
@@ -70,11 +80,10 @@ def load(e: me.LoadEvent):
 
 def page():
     state = me.state(State)
-    global chat_session
-    chat_session = config.chat_session
-    global app
-    app = agent.create_graph(Chat_State)
 
+    # global app
+    # app = agent.create_graph(Chat_State, )
+    # print(Chat_State["chat_session"])
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)
@@ -142,10 +151,10 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     logging.info(f"User message submitted as: {
                  input} at time: {submit_time_human}")
     state.message_count = state.message_count + 1
-    modules.publish_message_pubsub(
-        input, submit_time_bq_format, state.message_count, state.session_id)
-    logging.info(f"PubSub message for user message successfully sent for message {
-                 state.message_count} in session {state.session_id}")
+    # modules.publish_message_pubsub(
+    #     input, submit_time_bq_format, state.message_count, state.session_id)
+    # logging.info(f"PubSub message for user message successfully sent for message {
+    #              state.message_count} in session {state.session_id}")
 
     output = state.output
     if output is None:
@@ -166,13 +175,13 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     response_time = reply_time - submit_time
     reply_time_bq_format = submit_time*pow(10, 6)
     reply_time_human = datetime.datetime.fromtimestamp(reply_time)
-    logging.info(f"Model PubSub message sent as: {
-                output_message} at time: {reply_time_human}")
-    logging.info(f"Response time in seconds: {response_time}")
-    modules.publish_reply_pubsub(
-        output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
-    logging.info(f"PubSub message for reply successfully sent for message {
-                        state.reply_count} in session {state.session_id}")
+    # logging.info(f"Model PubSub message sent as: {
+    #             output_message} at time: {reply_time_human}")
+    # logging.info(f"Response time in seconds: {response_time}")
+    # modules.publish_reply_pubsub(
+    #     output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
+    # logging.info(f"PubSub message for reply successfully sent for message {
+                        # state.reply_count} in session {state.session_id}")
 
 
     for content in output_message:
@@ -188,42 +197,46 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
     state = me.state(State)
-    # state = Agent_State
 
-    # Assemble prompt from chat history
-    # Assemble if selected model is Gemini
     if Selected_Model == config.Valid_Models["GEMMA"]:
-        result = ask_gemma(input)
-        return result
-    # Assemble if selected model is Gemini Tuned or Gemini
+        # Assemble prompt from chat history
+        chat_history = ""
+        for h in history:
+            chat_history += "<start_of_turn>{role}\n{content}<end_of_turn>\n".format(
+                role=h.role, content=h.content)
+        # full_input = f"{chat_history}\n{input}"
+
+        result = ask_gemma(full_input)
+        yield result
     else:
-        if (state.message_count == 1, state.reply_count==0):
-            system_message = ""
-            chat_session.invoke(Content(role="system", parts=[Part.from_text(instructions.system_instructions)]))
-            for x in instructions.system_instructions:
-                system_message += x.replace("\n", " ")
+        # Assemble prompt from chat history if selected model is Gemini Tuned or Gemini
+        # if state.reply_count == 0:
+        #     full_input = input
+        # else:
+        #
+        full_input = "\n".join(message.content for message in history)
+            # full_input = f"{chat_history}\n{input}"
+        result = function_coordination(full_input)
+        yield result
 
-            input_message = {"messages": [HumanMessage(content=input)]}
-        else:
-            input_message = {"messages": [HumanMessage(content=input)]}
+        # result = ask_gemini(full_input)
+        # input_message = {"messages": [HumanMessage(content=input)]}
+        # input_config = {"configurable": {"thread_id": session_id}}
+        # response = app.invoke(input_message, input_config)
+        # result = response["messages"][-1].content
+        # logging.info(f'Response to {input}: {result}')
+        # print(type(result))
 
-        input_config = {"configurable": {"thread_id": session_id}}
-
-        response = app.invoke(input_message, input_config)
-        result = response["messages"][-1].content
-        logging.info(f'Response to {input}: {result}')
-        print(type(result))
-
-        if type(result) is str:
-            result = result
-            return result
-        else:
-            try:
-                result = str(result)
-                return result
-            except TypeError:
-                logging.info(f"Type Error occurred on final output to chat. {TypeError}")
-                return("Uh, that didn't go well. Try again!")
+        # if type(result) is str:
+        #     result = result
+        #     return result
+        # else:
+        #     try:
+        #         result = str(result)
+        #         return result
+        #     except TypeError:
+        #         logging.info(f"Type Error occurred on final output to chat. {TypeError}")
+        #         return("Uh, that didn't go well. Try again!")
 
 
 # Constants

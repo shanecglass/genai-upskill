@@ -1,27 +1,26 @@
-import logging
-import os
-import model_mgmt.primary as primary
-import model_mgmt.instructions as instructions
-import model_mgmt.toolkit as toolkit
-import model_mgmt.testing as testing
-
-
+# from json_repair import repair_json
+# from langgraph.prebuilt import ToolNode
+# from langchain.tools import tool
+# from langchain_core.runnables import Runnable, RunnableConfig
+# from langchain_core.prompts import ChatPromptTemplate
 from google.cloud import aiplatform
-from langchain_google_vertexai import ChatVertexAI
-
+# from langchain_google_vertexai import ChatVertexAI
 from vertexai.generative_models import (
-    ChatSession,
     GenerationConfig,
     GenerativeModel,
     HarmCategory,
     HarmBlockThreshold,
-    Tool,
-
 )
-from enum import Enum
 
-import json
+import logging
+import model_mgmt.instructions as instructions
+import model_mgmt.primary as primary
+import model_mgmt.testing as testing
+import model_mgmt.toolkit as toolkit
 import vertexai
+# import debugpy
+
+# debugpy.listen(5678)
 
 # flake8: noqa --E501
 
@@ -82,8 +81,8 @@ Selected_Model = model_check()
 
 
 gen_config = {
-    "temperature": 0.1,
-    "top_p": .3,
+    "temperature": 0.0,
+    "top_p": .1,
     "top_k": 1,
     "candidate_count": 1,
     "max_output_tokens": 1048,
@@ -92,10 +91,10 @@ gen_config = {
 
 generation_config = GenerationConfig(
     temperature=gen_config['temperature'],
-    top_p=gen_config['top_p'],
-    top_k=gen_config['top_k'],
+    # top_p=gen_config['top_p'],
+    # top_k=gen_config['top_k'],
     candidate_count=gen_config['candidate_count'],
-    max_output_tokens=gen_config['max_output_tokens'],
+    # max_output_tokens=gen_config['max_output_tokens'],
 )
 
 
@@ -130,9 +129,9 @@ def model_to_call(Selected_Model=Selected_Model):
         model_to_call = GenerativeModel(
             model_name=model_id,
             generation_config=generation_config,
-            safety_settings=safety_settings,
+            # safety_settings=safety_settings,
             system_instruction=instructions.system_instructions,
-            tools=[toolkit.tool_list]
+            tools=[toolkit.tools]
         )
         endpoint_id = gemini_tuned_endpoint_id
     return model_to_call, endpoint_id, model_id
@@ -143,27 +142,13 @@ endpoint_id = model_to_call(Selected_Model)[1]
 model_name = model_to_call(Selected_Model)[2]
 
 
-def start_chat():
-    vertexai.init(project=project_id, location=location)
-    # chat_history = []
-    # for h in history:
-    #     message_content = Content(
-    #         role=h.role, parts=[Part.from_text(h.content)])
-    #     chat_history.append(message_content)
-    chat_session = ChatVertexAI(
-        model=model_name,
-        temperature=gen_config['temperature'],
-        top_p=gen_config['top_p'],
-        top_k=gen_config['top_k'],
-        candidate_count=gen_config['candidate_count'],
-        max_output_tokens=gen_config['max_output_tokens'],
-        safety_settings=safety_settings)
-    # chat_session.invoke(system_message)
-    return chat_session
+# def start_chat(model=generative_model):
+#     chat_session = model.start_chat()
+#     # system_message = ""
+#     # for x in instructions.system_instructions:
+#     #     system_message += x.join(" ")
+#     # chat_session.invoke(system_message)
+#     return chat_session
 
 
-
-
-# print(system_message)
-
-chat_session = start_chat()
+# chat_session = start_chat()

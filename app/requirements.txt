@@ -1,4 +1,5 @@
 bigframes
+debugpy
 google-cloud-aiplatform
 google-cloud-pubsub
 google-cloud-storage
