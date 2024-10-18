@@ -10,6 +10,7 @@ from vertexai.generative_models import (
     GenerativeModel,
     HarmCategory,
     HarmBlockThreshold,
+    ToolConfig
 )
 
 import logging
@@ -91,8 +92,8 @@ gen_config = {
 
 generation_config = GenerationConfig(
     temperature=gen_config['temperature'],
-    # top_p=gen_config['top_p'],
-    # top_k=gen_config['top_k'],
+    top_p=gen_config['top_p'],
+    top_k=gen_config['top_k'],
     candidate_count=gen_config['candidate_count'],
     # max_output_tokens=gen_config['max_output_tokens'],
 )
@@ -131,8 +132,15 @@ def model_to_call(Selected_Model=Selected_Model):
             generation_config=generation_config,
             # safety_settings=safety_settings,
             system_instruction=instructions.system_instructions,
-            tools=[toolkit.tools]
-        )
+            tools=[toolkit.tools],
+            tool_config=ToolConfig(
+                function_calling_config=ToolConfig.FunctionCallingConfig(
+                    # ANY mode forces the model to predict only function calls
+                    mode=ToolConfig.FunctionCallingConfig.Mode.AUTO,
+                    # Allowed function calls to predict when the mode is ANY. If empty, any  of
+                    # the provided function calls will be predicted.
+                )
+            ))
         endpoint_id = gemini_tuned_endpoint_id
     return model_to_call, endpoint_id, model_id
 
@@ -142,13 +150,13 @@ endpoint_id = model_to_call(Selected_Model)[1]
 model_name = model_to_call(Selected_Model)[2]
 
 
-# def start_chat(model=generative_model):
-#     chat_session = model.start_chat()
-#     # system_message = ""
-#     # for x in instructions.system_instructions:
-#     #     system_message += x.join(" ")
-#     # chat_session.invoke(system_message)
-#     return chat_session
+def start_chat(model=generative_model):
+    chat_session = model.start_chat()
+    system_message = system_instructions
+    # for x in instructions.system_instructions:
+    #     system_message += x.join(" ")
+    chat_session.send_message(system_message)
+    return chat_session
 
 
-# chat_session = start_chat()
+chat_session = start_chat()

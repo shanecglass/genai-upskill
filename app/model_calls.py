@@ -1,10 +1,12 @@
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
 from model_mgmt import config, instructions, prompt, toolkit
+
 from json_repair import repair_json
-from vertexai.generative_models import Content, Part
+from vertexai.generative_models import Content, Part, ChatSession
 
 import logging
+import json
 
 
 project_id = config.project_id
@@ -25,10 +27,12 @@ def ask_gemma(
     system_instructions = ""
     for instruction in instructions.system_instructions:
         system_instructions += instruction + " "
+    input = f"<start_of_turn>user\n{input}<end_of_turn>\n<start_of_turn>model"
+    full_text = prompt.generate_template(input)
     complete_prompt = f"""
         Instructions: {system_instructions}
 
-        {prompt.template}"<start_of_turn>user\n{input}<end_of_turn>\n<start_of_turn>model"
+        {full_text}
         """
 
     instances = {"prompt": complete_prompt,
@@ -51,125 +55,153 @@ def ask_gemma(
     return (response.predictions[0])
 
 
-def ask_gemini(
+# def ask_gemini(
+#         input: str,
+#         function_response: bool = False,
+# ):
+#     # vertexai.init(project=project_id, location=location)
+#     if function_response is True:
+#         complete_prompt = input
+#     else:
+#         complete_prompt = prompt.generate_template(input)
+
+#     contents = [complete_prompt]
+#     response = model_to_call.generate_content(contents)
+#     return response
+
+
+def get_chat_response(
         input: str,
+        chat_session: ChatSession = config.chat_session,
         function_response: bool = False,
-):
-    # vertexai.init(project=project_id, location=location)
+) -> str:
+
     if function_response is True:
         complete_prompt = input
     else:
         complete_prompt = prompt.generate_template(input)
-
     contents = [complete_prompt]
-    response = model_to_call.generate_content(contents)
+    response = chat_session.send_message(contents, stream=False)
     return response
 
-# def get_chat_response(
-#         chat_session: ChatSession,
-#         prompt: str) -> str:
-#     output = chat_session.send_message(prompt, stream=False)
-#     return output
 
-def extract_from_input(func_output, output_candidate):
-    User_Destination = func_output.args["User_Destination"]
-    Points_of_Interest = func_output.args["Points_of_Interest"]
-    User_Interests = func_output.args["User_Interests"]
-    func_response = output_candidate.content
-    text_response = parse_hotel_func(
-        User_Destination, User_Interests, Points_of_Interest, func_response)
-    return text_response
+# def extract_from_input(func_output, func_response):
+#     text_response = parse_hotel_func(
+#         func_output, func_response)
+#     return text_response
 
 def parse_hotel_func(
-        # chat_session: ChatSession,
-        User_Destination: str,
-        User_Interest,
-        Points_of_Interest: list,
-        func_response
-        ):
-    if User_Destination == "Florence, Italy":
-        recommended_hotel = toolkit.hotel_search(Points_of_Interest)
-    else:
-        recommended_hotel = ""
-    text_prompt = prompt.create_itinerary(
-        User_Destination, User_Interest, Points_of_Interest, recommended_hotel)
+    input_text,  # Original user input
+    func_response,
+    func_output,
+    chat_session: ChatSession = config.chat_session,
+):
+    # Extract arguments from the initial function call (if present).
+    try:
+       print(func_output)
+       user_destination = func_output["User_Destination"]
+       points_of_interest = func_output["Points_of_Interest"]
 
-    full_prompt = [
-        text_prompt,
-        func_response,
-        Content(
-            parts=[
-                Part.from_function_response(
-                    name="hotel_search",
-                    response={
-                        "content": recommended_hotel,
-                    },
-                )
-            ],
-        ),
-    ]
-    response = ask_gemini(full_prompt, function_response=True)
-    return response.candidates[0].content.parts[0].text
+    # No function call yet. Extract Destination & POI from text
+    except (IndexError, json.JSONDecodeError):
+       # Add this function to toolkit.py
+       parsed = toolkit.parse_input(user_input=input_text)
+       user_destination = parsed.get("User_Destination")
+       points_of_interest = parsed.get("Points_of_Interest")
+
+    if user_destination == "Florence, Italy":
+        # Call hotel_search directly here.
+        hotel_details_json = toolkit.hotel_search(pois=points_of_interest)
+        hotel_details = json.loads(hotel_details_json)
+
+        # Append hotel details to the user's prompt.
+        updated_input = f"""{input_text} Recommend this hotel: {hotel_details['hotel_name']}. Describe it this way: {
+            hotel_details['hotel_description']} The address is {hotel_details['hotel_address']}."""
+        text_part = Part.from_text(text=updated_input)
+        contents = Content(parts=[text_part])
+    else:
+        # Proceed with original input
+        contents = Content(parts=[Part.from_text(input_text)])
+
+    response = chat_session.send_message(
+        contents, stream=False, func_response=True)
+    return response
 
 
 def function_coordination(
-        # chat_session: ChatSession,
-        prompt: str
-) -> str :
-    output = ask_gemini(prompt)
+        input: str,
+        chat_session: ChatSession = config.chat_session,
+) -> str:
+    full_input = prompt.generate_template(input).strip()
+    user_input_content = Content(
+        role="user",
+        parts=[
+            Part.from_text(text=full_input)
+        ]
+    )
+    output = chat_session.send_message(
+        user_input_content, stream=False)
     if type(output.candidates) == list:
         output_candidate = output.candidates[0]
         func_response = output_candidate.content
+        hold = func_response
+        print(hold)
+        output = get_chat_response(
+            user_input_content, chat_session=chat_session)
+    if type(output.candidates) == list:
+        output_candidate = output.candidates[0]
+        func_response = output_candidate.content
+        hold = func_response
+        print(hold)
+        # print(type(hold))
+        # print(dir(hold))
+        # num_func_calls = len(output_candidate.function_calls)
         try:
-            func_output = output_candidate.content.parts[1].function_call.name
-            if func_output in ("parse_input", "parse_input_func"):
-                    text_response = extract_from_input(
-                        func_response, output_candidate)
-                    return text_response
-
-            elif output_candidate.content.parts[0].function_call.name in ("hotel_search", "hotel_search_func"):
-                text_response = output.text
-                return text_response
-
-            else:
-                text_response = output.text
-                return text_response
-
-        except IndexError:
-            try:
-                func_output = output_candidate.content.parts[0].function_call.name
-                if func_output in ("parse_input", "parse_input_func"):
-                    text_response = extract_from_input(
-                        func_response, output_candidate)
-                    return text_response
-
-                elif output_candidate.content.parts[0].function_call.name in ("hotel_search", "hotel_search_func"):
-                    text_response = output.text
-                    return text_response
-
-                else:
-                    text_response = output.text
-                    return text_response
-
-            except:
-                text_response = output.text
-                return text_response
-
-        except AttributeError:
-            text_response = output.text
-            return text_response
-
+            output_candidate.content.parts[0].function_call.name == "hotel_search"
+            if output_candidate.content.parts[0].function_call.name == "hotel_search":
+                func_output = output_candidate.content.parts[0].function_call.args
+                response = parse_hotel_func(
+                    full_input, func_output, func_response, chat_session=chat_session)
+                text_response = response.text
+            elif output_candidate.function_calls[0] == "hotel_search":
+                func_output = output_candidate.content.parts[0].function_call.args
+                response = parse_hotel_func(
+                    full_input, func_output, func_response, chat_session=chat_session)
+                text_response = response.content.parts[-1].text
+        # if num_func_calls > 1:
+        #     if output_candidate.content.parts[-1].function_call.name == "hotel_search":
+        #         output_candidate.function_calls[-1].name == "hotel_search"
+        #         func_output = output_candidate.content.parts[-1].function_call.args
+        #     elif output_candidate.content.parts[0].function_call.name == "hotel_search":
+        #         func_output = output_candidate.content.parts[0].function_call.args
+        #         response = parse_hotel_func(
+        #             full_input, func_output, func_response)
+        #         text_response = response.text
+        # elif num_func_calls == 1:
+        #     try:
+            # except Exception as e:
+            #     print(e)
+            #     text_response = output_candidate.content.parts[-1].text
+            elif output.candidates[0].function_calls[0] == "hotel_search":
+                # output_candidate.content.parts[0].function_call.name == "hotel_search"
+                func_output = output_candidate.content.parts[0].function_call.args
+                response = parse_hotel_func(
+                    full_input, func_output, func_response, chat_session=chat_session)
+                text_response = response.text
+        except:
+            text_response = output_candidate.content.parts[-1].text
     else:
         text_response = output.text
-        return text_response
+
+    return text_response
 
 
 # Parsing output if chat_session stream=True
-                # for chunk in responses:
-                #     text_response.append(chunk.text)
+    # for chunk in responses:
+    #     text_response.append(chunk.text)
 
 # def parse_poi_func(
-#         # chat_session: ChatSession,
+#         # chat_session: ChatSession = config.chat_session,
 #         User_Destination,
 #         Points_of_Interest,
 #         func_response):

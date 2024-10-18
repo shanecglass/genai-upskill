@@ -6,7 +6,7 @@ from model_calls import ask_gemma, function_coordination
 from model_mgmt import config, toolkit
 from operator import add
 from typing import Annotated, Literal, TypedDict, Callable, Generator, Literal
-# from vertexai.generative_models import ChatSession
+from vertexai.generative_models import ChatSession
 
 import datetime
 
@@ -16,9 +16,9 @@ import mesop.labs as mel
 import time
 import uuid
 import vertexai
-import debugpy
+# import debugpy
 
-debugpy.listen(5678)
+# debugpy.listen(5678)
 
 
 # flake8: noqa --E501
@@ -50,20 +50,21 @@ class State:
     reply_count: int = 0
     session_id: str = session_id
 
-# class Chat_State(TypedDict):
-#     # Messages have the type "list". The `add_messages` function
-#     # in the annotation defines how this state key should be updated
-#     # (in this case, it appends messages to the list, rather than overwriting them)
-#     # session: str = session_id
-#     messages: Annotated[list, add_messages]
-#     chat_session: ChatVertexAI = config.chat_session
+
+class Chat_State(TypedDict):
+    # Messages have the type "list". The `add_messages` function
+    # in the annotation defines how this state key should be updated
+    # (in this case, it appends messages to the list, rather than overwriting them)
+    # session: str = session_id
+    messages: Annotated[list, add_messages]
+    chat_session: ChatVertexAI = config.chat_session
 
 
 def load(e: me.LoadEvent):
     me.set_theme_mode("dark")
     vertexai.init(project=config.project_id, location=config.location)
-    # global chat_session
-    # chat_session = config.start_chat(generative_model)
+    global chat_session
+    chat_session = config.start_chat(generative_model)
     yield
 
 @me.page(
@@ -197,14 +198,13 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
     state = me.state(State)
-
+    chat_history = ""
+    for h in history:
+        chat_history += "<start_of_turn>{role}{content}<end_of_turn>".format(
+            role=h.role, content=h.content)
     if Selected_Model == config.Valid_Models["GEMMA"]:
         # Assemble prompt from chat history
-        chat_history = ""
-        for h in history:
-            chat_history += "<start_of_turn>{role}\n{content}<end_of_turn>\n".format(
-                role=h.role, content=h.content)
-        # full_input = f"{chat_history}\n{input}"
+        full_input = f"{chat_history}\n{input}"
 
         result = ask_gemma(full_input)
         yield result
@@ -214,9 +214,13 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         #     full_input = input
         # else:
         #
-        full_input = "\n".join(message.content for message in history)
-            # full_input = f"{chat_history}\n{input}"
-        result = function_coordination(full_input)
+        # full_input = "\n".join(message.content for message in history)
+        if (state.message_count == 1, state.reply_count == 0):
+            chat_session = config.start_chat(generative_model)
+        else:
+            chat_session = chat_session
+        full_input = f"{chat_history}\n{input}"
+        result = function_coordination(full_input, chat_session=chat_session)
         yield result
 
         # result = ask_gemini(full_input)
