@@ -92,9 +92,9 @@ gen_config = {
 
 generation_config = GenerationConfig(
     temperature=gen_config['temperature'],
-    top_p=gen_config['top_p'],
-    top_k=gen_config['top_k'],
-    candidate_count=gen_config['candidate_count'],
+    # top_p=gen_config['top_p'],
+    # top_k=gen_config['top_k'],
+    # candidate_count=gen_config['candidate_count'],
     # max_output_tokens=gen_config['max_output_tokens'],
 )
 

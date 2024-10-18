@@ -81,6 +81,9 @@ def parse_input(user_input: str):
         print(f"Invalid JSON output from the model: {response.text}")
         cleaned_response = {"User_Destination": None, "Points_of_Interest": [
         ], "User_Interests": None}  # Or handle as needed
+
+    cleaned_response = json.loads(cleaned_response)
+    print(cleaned_response)
     return cleaned_response
 
 def get_text_embeddings(text_input):
@@ -96,10 +99,10 @@ def get_text_embeddings(text_input):
 # @tool
 def hotel_search(pois):
     """
-    Find a hotel recommendation near Points_of_Interest in Florence, Italy
+    Find a hotel near the user's Points_of_Interest in Florence, Italy
 
     Args:
-        pois: A list of Points_of_Interest
+        pois: A string containing a comma-separated list of Points_of_Interest
 
     Returns:
         A JSON object with the name, description, and address of the recommended hotel
@@ -144,7 +147,6 @@ def hotel_search(pois):
     print(hotel_json)
     return hotel_json
 
-
 parse_input_func = FunctionDeclaration(
     name="parse_input",
     description="Determine the destination and points of interest the user has identified",
@@ -160,7 +162,15 @@ parse_input_func = FunctionDeclaration(
 
 hotel_search_func = FunctionDeclaration(
     name="hotel_search",
-    description="Search the hotels database to find a hotel near the user's Points of Interest in Florence, Italy",
+    description="""
+        Find a hotel near the user's Points_of_Interest in Florence, Italy
+
+        Args:
+            pois: A string containing a comma-separated list of Points_of_Interest
+
+        Returns:
+            A JSON object with the name, description, and address of the recommended hotel
+    """,
     parameters={
         "type": "object",
         "properties": {
@@ -172,7 +182,7 @@ hotel_search_func = FunctionDeclaration(
     },
 )
 
-tool_list = [hotel_search_func]
+tool_list = [hotel_search_func, parse_input_func]
 
 tools = Tool(
     function_declarations=tool_list

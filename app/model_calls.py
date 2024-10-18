@@ -72,15 +72,17 @@ def ask_gemma(
 
 def get_chat_response(
         input: str,
-        chat_session: ChatSession = config.chat_session,
+        chat_session: ChatSession,
         function_response: bool = False,
 ) -> str:
 
     if function_response is True:
         complete_prompt = input
+        contents = complete_prompt
     else:
         complete_prompt = prompt.generate_template(input)
-    contents = [complete_prompt]
+        contents = [complete_prompt]
+
     response = chat_session.send_message(contents, stream=False)
     return response
 
@@ -92,9 +94,8 @@ def get_chat_response(
 
 def parse_hotel_func(
     input_text,  # Original user input
-    func_response,
     func_output,
-    chat_session: ChatSession = config.chat_session,
+    chat_session: ChatSession,
 ):
     # Extract arguments from the initial function call (if present).
     try:
@@ -106,123 +107,47 @@ def parse_hotel_func(
     except (IndexError, json.JSONDecodeError):
        # Add this function to toolkit.py
        parsed = toolkit.parse_input(user_input=input_text)
-       user_destination = parsed.get("User_Destination")
-       points_of_interest = parsed.get("Points_of_Interest")
+       user_destination = parsed["User_Destination"]
+       points_of_interest = parsed["Points_of_Interest"]
+       print(user_destination)
+       print(points_of_interest)
 
     if user_destination == "Florence, Italy":
-        # Call hotel_search directly here.
         hotel_details_json = toolkit.hotel_search(pois=points_of_interest)
         hotel_details = json.loads(hotel_details_json)
 
-        # Append hotel details to the user's prompt.
-        updated_input = f"""{input_text} Recommend this hotel: {hotel_details['hotel_name']}. Describe it this way: {
-            hotel_details['hotel_description']} The address is {hotel_details['hotel_address']}."""
-        text_part = Part.from_text(text=updated_input)
-        contents = Content(parts=[text_part])
+        function_response_part = Part.from_function_response(
+            name="hotel_search",
+            response=hotel_details
+        )
+        complete_prompt = Part.from_text(prompt.generate_template(input_text))
+        contents = Content(role="user", parts=[
+            complete_prompt, function_response_part])
     else:
         # Proceed with original input
         contents = Content(parts=[Part.from_text(input_text)])
 
-    response = chat_session.send_message(
-        contents, stream=False, func_response=True)
-    return response
+    response = get_chat_response(
+        contents, chat_session=chat_session, function_response=True)
+    return response.candidates[0]
 
 
-def function_coordination(
-        input: str,
-        chat_session: ChatSession = config.chat_session,
-) -> str:
+def function_coordination(input: str, chat_session: ChatSession) -> str:
     full_input = prompt.generate_template(input).strip()
     user_input_content = Content(
-        role="user",
-        parts=[
-            Part.from_text(text=full_input)
-        ]
-    )
-    output = chat_session.send_message(
-        user_input_content, stream=False)
-    if type(output.candidates) == list:
+        role="user", parts=[Part.from_text(text=full_input)])
+    output = chat_session.send_message(user_input_content, stream=False)
+
+    if isinstance(output.candidates, list):
         output_candidate = output.candidates[0]
-        func_response = output_candidate.content
-        hold = func_response
-        print(hold)
-        output = get_chat_response(
-            user_input_content, chat_session=chat_session)
-    if type(output.candidates) == list:
-        output_candidate = output.candidates[0]
-        func_response = output_candidate.content
-        hold = func_response
-        print(hold)
-        # print(type(hold))
-        # print(dir(hold))
-        # num_func_calls = len(output_candidate.function_calls)
-        try:
-            output_candidate.content.parts[0].function_call.name == "hotel_search"
-            if output_candidate.content.parts[0].function_call.name == "hotel_search":
-                func_output = output_candidate.content.parts[0].function_call.args
+
+        for function_call in output_candidate.function_calls:
+            if function_call.name == "hotel_search":
+                print("hotel_search function call found")
+                func_output = function_call.args
                 response = parse_hotel_func(
-                    full_input, func_output, func_response, chat_session=chat_session)
-                text_response = response.text
-            elif output_candidate.function_calls[0] == "hotel_search":
-                func_output = output_candidate.content.parts[0].function_call.args
-                response = parse_hotel_func(
-                    full_input, func_output, func_response, chat_session=chat_session)
-                text_response = response.content.parts[-1].text
-        # if num_func_calls > 1:
-        #     if output_candidate.content.parts[-1].function_call.name == "hotel_search":
-        #         output_candidate.function_calls[-1].name == "hotel_search"
-        #         func_output = output_candidate.content.parts[-1].function_call.args
-        #     elif output_candidate.content.parts[0].function_call.name == "hotel_search":
-        #         func_output = output_candidate.content.parts[0].function_call.args
-        #         response = parse_hotel_func(
-        #             full_input, func_output, func_response)
-        #         text_response = response.text
-        # elif num_func_calls == 1:
-        #     try:
-            # except Exception as e:
-            #     print(e)
-            #     text_response = output_candidate.content.parts[-1].text
-            elif output.candidates[0].function_calls[0] == "hotel_search":
-                # output_candidate.content.parts[0].function_call.name == "hotel_search"
-                func_output = output_candidate.content.parts[0].function_call.args
-                response = parse_hotel_func(
-                    full_input, func_output, func_response, chat_session=chat_session)
-                text_response = response.text
-        except:
-            text_response = output_candidate.content.parts[-1].text
-    else:
-        text_response = output.text
+                    full_input, func_output, output_candidate.content, chat_session=chat_session
+                )
+                return response.text
 
-    return text_response
-
-
-# Parsing output if chat_session stream=True
-    # for chunk in responses:
-    #     text_response.append(chunk.text)
-
-# def parse_poi_func(
-#         # chat_session: ChatSession = config.chat_session,
-#         User_Destination,
-#         Points_of_Interest,
-#         func_response):
-#     poi_list = ""
-#     for poi in Points_of_Interest:
-#         poi_list += poi + ", "
-#     prompt_text = prompt.create_poi(User_Destination, poi_list)
-#     func_response = f'{{"User_Destination": {User_Destination}, "Points_of_Interest": {poi_list},}}'
-#     full_prompt = [
-#         prompt_text,
-#         func_response,
-#         Content(
-#             parts=[
-#                 Part.from_function_response(
-#                     name="identify_pois_and_destination",
-#                     response={
-#                          "content": func_response
-#                     }
-#                 )
-#             ]
-#         )
-#     ]
-#     response = ask_gemini(full_prompt)
-#     return response.text
+    return output_candidate.text  # Default to returning the text if no hotel_search call

@@ -27,8 +27,8 @@ import vertexai
 Role = Literal["user", "assistant"]
 Selected_Model = config.Selected_Model
 model_configs = config.model_to_call(Selected_Model)
-generative_model = model_configs[0]
-endpoint_id = model_configs[1]
+generative_model = config.generative_model
+endpoint_id = config.endpoint_id
 # tool_node = toolkit.tool_node
 session_id = str(uuid.uuid4())
 
@@ -50,14 +50,13 @@ class State:
     reply_count: int = 0
     session_id: str = session_id
 
-
 class Chat_State(TypedDict):
     # Messages have the type "list". The `add_messages` function
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
     # session: str = session_id
     messages: Annotated[list, add_messages]
-    chat_session: ChatVertexAI = config.chat_session
+    chat_session: ChatSession = config.chat_session
 
 
 def load(e: me.LoadEvent):
@@ -65,6 +64,7 @@ def load(e: me.LoadEvent):
     vertexai.init(project=config.project_id, location=config.location)
     global chat_session
     chat_session = config.start_chat(generative_model)
+    Chat_State.chat_session = chat_session
     yield
 
 @me.page(
@@ -81,7 +81,6 @@ def load(e: me.LoadEvent):
 
 def page():
     state = me.state(State)
-
     # global app
     # app = agent.create_graph(Chat_State, )
     # print(Chat_State["chat_session"])
@@ -215,12 +214,9 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         # else:
         #
         # full_input = "\n".join(message.content for message in history)
-        if (state.message_count == 1, state.reply_count == 0):
-            chat_session = config.start_chat(generative_model)
-        else:
-            chat_session = chat_session
-        full_input = f"{chat_history}\n{input}"
-        result = function_coordination(full_input, chat_session=chat_session)
+        # full_input = f"{chat_history}\n{input}"
+        chat_session = Chat_State.chat_session
+        result = function_coordination(input, chat_session=chat_session)
         yield result
 
         # result = ask_gemini(full_input)
