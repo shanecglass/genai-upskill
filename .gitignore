@@ -5,4 +5,5 @@
 .DS_Store
 .vscode
 
-**/testing
+# Ignore the testing.py file in the app/model_mgmt directory
+app/model_mgmt/testing.py

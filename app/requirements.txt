@@ -4,7 +4,7 @@ google-cloud-aiplatform
 google-cloud-pubsub
 google-cloud-storage
 gunicorn
-json-repair
+json_repair
 langchain
 langgraph
 langchain_google_vertexai

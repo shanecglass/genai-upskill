@@ -1,4 +1,4 @@
-WEEK="3"
+WEEK="5"
 PROJ=$(gcloud config get-value project)
 PROJ_NUMBER=$(gcloud projects list \
 --filter="$(gcloud config get-value project)" \
