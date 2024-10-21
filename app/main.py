@@ -14,9 +14,7 @@ import modules
 import time
 import uuid
 import vertexai
-# import debugpy
 
-# debugpy.listen(5678)
 
 
 # flake8: noqa --E501
@@ -57,18 +55,17 @@ class Chat_State(TypedDict):
     chat_session: ChatSession = config.chat_session
 
 
-def load(e: me.LoadEvent):
-    vertexai.init(project=config.project_id, location=config.location)
-    global chat_session
-    chat_session = config.start_chat(generative_model)
-    Chat_State.chat_session = chat_session
-    yield
+def on_load(e: me.LoadEvent):
+  vertexai.init(project=config.project_id, location=config.location)
+  global chat_session
+  chat_session = config.start_chat(generative_model)
+  Chat_State.chat_session = chat_session
+  yield
+
 
 @me.page(
-    # on_load=load,
+    on_load=on_load,
     security_policy=me.SecurityPolicy(
-        allowed_iframe_parents=[
-            "https://google.github.io", "https://huggingface.co"],
         dangerously_disable_trusted_types=True
     ),
     path="/",
@@ -201,7 +198,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         full_input = f"{chat_history}\n{input}"
 
         result = ask_gemma(full_input)
-        yield result
+        return result
     else:
         # Assemble prompt from chat history if selected model is Gemini Tuned or Gemini
         # if state.reply_count == 0:
@@ -212,7 +209,7 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         # full_input = f"{chat_history}\n{input}"
         chat_session = Chat_State.chat_session
         result = function_coordination(input, chat_session=chat_session)
-        yield result
+        return result
 
         # result = ask_gemini(full_input)
         # input_message = {"messages": [HumanMessage(content=input)]}
@@ -247,14 +244,14 @@ _BOT_USER_DEFAULT = "travelchat-bot"
 
 # Styles
 
-_COLOR_BACKGROUND = me.theme_var("background")
-_COLOR_CHAT_BUBBLE_YOU = me.theme_var("surface-container-low")
-_COLOR_CHAT_BUBBLE_BOT = me.theme_var("secondary-container")
-_COLOR_CHAT_BUUBBLE_EDITED = me.theme_var("tertiary-container")
+_COLOR_BACKGROUND = "white"
+_COLOR_CHAT_BUBBLE_YOU = "#F7F2FA"
+_COLOR_CHAT_BUBBLE_BOT = "#E8DEF8"
+_COLOR_CHAT_BUUBBLE_EDITED = "#FFD8E4"
 
 _DEFAULT_PADDING = me.Padding.all(20)
 _DEFAULT_BORDER_SIDE = me.BorderSide(
-    width="1px", style="solid", color=me.theme_var("secondary-fixed")
+    width="1px", style="solid", color="#E8DEF8"
 )
 
 _LABEL_BUTTON = "send"
@@ -298,32 +295,6 @@ _STYLE_CHAT_BUBBLE_NAME = me.Style(
     padding=me.Padding(left=15, right=15, bottom=5),
 )
 _STYLE_CHAT_BUBBLE_PLAINTEXT = me.Style(margin=me.Margin.symmetric(vertical=15))
-
-_STYLE_MODAL_CONTAINER = me.Style(
-    background=me.theme_var("surface-container"),
-    margin=me.Margin.symmetric(vertical="0", horizontal="auto"),
-    width="min(1024px, 100%)",
-    box_sizing="content-box",
-    height="100%",
-    overflow_y="scroll",
-    box_shadow=("0 3px 1px -2px #0003, 0 2px 2px #00000024, 0 1px 5px #0000001f"),
-)
-
-_STYLE_MODAL_CONTENT = me.Style(margin=me.Margin.all(20))
-
-_STYLE_PREVIEW_CONTAINER = me.Style(
-    display="grid",
-    grid_template_columns="repeat(2, 1fr)",
-)
-
-_STYLE_PREVIEW_ORIGINAL = me.Style(
-    color=me.theme_var("on-surface"), padding=_DEFAULT_PADDING
-)
-
-_STYLE_PREVIEW_REWRITE = me.Style(
-    background=_COLOR_CHAT_BUUBBLE_EDITED, padding=_DEFAULT_PADDING
-)
-
 
 def _make_style_chat_bubble_wrapper(role: Role) -> me.Style:
     """Generates styles for chat bubble position.

@@ -23,8 +23,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 # Create non-root user
-RUN groupadd -g 900 mesop && useradd -u 900 -s /bin/bash -g mesop mesop
-USER mesop
+# RUN groupadd -g 900 mesop && useradd -u 900 -s /bin/bash -g mesop mesop
+# USER mesop
 
 # Copy local code to the container image.
 WORKDIR /home/ubuntudocker/srv/app
@@ -33,6 +33,8 @@ COPY main.py .
 COPY modules.py .
 COPY model_calls.py .
 COPY ./model_mgmt /home/ubuntudocker/srv/app/model_mgmt
+
+# RUN chown -R mesop:mesop /home/ubuntudocker/srv/app
 
 
 # Service must listen to $PORT environment variable.
@@ -43,4 +45,4 @@ ENV PORT 8080
 # server, with one worker process and 8 threads. For environments
 # with multiple CPU cores, increase the number of workers to match
 # the number of cores available.
-CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 4 --threads 8 --timeout 0 main:me
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 4 --threads 8 --timeout 300 main:me
