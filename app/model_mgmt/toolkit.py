@@ -7,15 +7,11 @@ import os
 
 from google.cloud import bigquery
 from langchain_core.prompts import ChatPromptTemplate
-# from langchain_core.runnables import Runnable, RunnableConfig
-# from langchain.tools import tool
-# from langgraph.prebuilt import ToolNode
 from json_repair import repair_json
 from vertexai.generative_models import (
     FunctionDeclaration,
     GenerationConfig,
     GenerativeModel,
-    grounding,
     Tool
 )
 from vertexai.language_models import TextEmbeddingModel

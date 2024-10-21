@@ -1,17 +1,16 @@
 from dataclasses import dataclass
-# from langchain_core.messages import AIMessage, ChatMessage, HumanMessage, SystemMessage
-# from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph.message import add_messages
 from model_calls import ask_gemma, function_coordination
-from model_mgmt import config, toolkit
+from model_mgmt import config
 from operator import add
-from typing import Annotated, Literal, TypedDict, Callable, Generator, Literal
+from typing import Annotated, Literal, TypedDict, Literal
 from vertexai.generative_models import ChatSession
 
 import datetime
 
 import logging
 import mesop as me
+import modules
 import time
 import uuid
 import vertexai
@@ -76,9 +75,6 @@ def load(e: me.LoadEvent):
 
 def page():
     state = me.state(State)
-    # global app
-    # app = agent.create_graph(Chat_State, )
-    # print(Chat_State["chat_session"])
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)
@@ -146,10 +142,10 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     logging.info(f"User message submitted as: {
                  input} at time: {submit_time_human}")
     state.message_count = state.message_count + 1
-    # modules.publish_message_pubsub(
-    #     input, submit_time_bq_format, state.message_count, state.session_id)
-    # logging.info(f"PubSub message for user message successfully sent for message {
-    #              state.message_count} in session {state.session_id}")
+    modules.publish_message_pubsub(
+        input, submit_time_bq_format, state.message_count, state.session_id)
+    logging.info(f"PubSub message for user message successfully sent for message {
+                 state.message_count} in session {state.session_id}")
 
     output = state.output
     if output is None:
@@ -170,13 +166,13 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     response_time = reply_time - submit_time
     reply_time_bq_format = submit_time*pow(10, 6)
     reply_time_human = datetime.datetime.fromtimestamp(reply_time)
-    # logging.info(f"Model PubSub message sent as: {
-    #             output_message} at time: {reply_time_human}")
-    # logging.info(f"Response time in seconds: {response_time}")
-    # modules.publish_reply_pubsub(
-    #     output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
-    # logging.info(f"PubSub message for reply successfully sent for message {
-                        # state.reply_count} in session {state.session_id}")
+    logging.info(f"Model PubSub message sent as: {
+        output_message} at time: {reply_time_human}")
+    logging.info(f"Response time in seconds: {response_time}")
+    modules.publish_reply_pubsub(
+        output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
+    logging.info(f"PubSub message for reply successfully sent for message {
+        state.reply_count} in session {state.session_id}")
 
 
     for content in output_message:
@@ -259,7 +255,7 @@ _DEFAULT_BORDER_SIDE = me.BorderSide(
 
 _LABEL_BUTTON = "send"
 _LABEL_BUTTON_IN_PROGRESS = "pending"
-_LABEL_INPUT = "Enter your prompt"
+_LABEL_INPUT = "Where would you like to travel?"
 
 _STYLE_INPUT_WIDTH = me.Style(width="100%")
 

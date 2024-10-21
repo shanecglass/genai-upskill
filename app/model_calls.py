@@ -1,11 +1,8 @@
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
 from model_mgmt import config, instructions, prompt, toolkit
-
-from json_repair import repair_json
 from vertexai.generative_models import Content, Part, ChatSession
 
-import logging
 import json
 
 

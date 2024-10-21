@@ -1,11 +1,16 @@
 # Use an official lightweight Python image.
-FROM python:3.12.7-slim
+FROM python:3.12.6-slim
 
 RUN apt-get update && \
-  apt-get -y install git \
+  apt-get install -y \
+  # General dependencies
   locales \
   locales-all && \
+  # Clean local repository of package files since they won't be needed anymore.
+  # Make sure this line is called after all apt-get update/install commands have
+  # run.
   apt-get clean && \
+  # Also delete the index files which we also don't need anymore.
   rm -rf /var/lib/apt/lists/*
 
 ENV LC_ALL en_US.UTF-8
@@ -16,7 +21,6 @@ ENV LANGUAGE en_US.UTF-8
 # install anything at container run time.
 COPY requirements.txt .
 RUN pip install -r requirements.txt
-RUN mkdir ./srv/app
 
 # Create non-root user
 RUN groupadd -g 900 mesop && useradd -u 900 -s /bin/bash -g mesop mesop

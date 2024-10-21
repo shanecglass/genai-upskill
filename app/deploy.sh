@@ -5,7 +5,7 @@ PROJ_NUMBER=$(gcloud projects list \
 --format="value(PROJECT_NUMBER)")
 SERVICE_ACCOUNT="cloud-run-manager@scg-l200-genai2.iam.gserviceaccount.com"
 LOCATION="us-west1"
-IMG_TAG="gcr.io/$PROJ/travel-chatbot-$WEEK"
+IMG_TAG="$LOCATION-docker.pkg.dev/$PROJ/l200-genai-upskill/travel-chatbot-$WEEK"
 
 gcloud run deploy "travel-chatbot-$WEEK"  \
     --project "$PROJ"    \
@@ -17,4 +17,3 @@ gcloud run deploy "travel-chatbot-$WEEK"  \
     --region "$LOCATION"    \
     --allow-unauthenticated    \
     --service-account "$SERVICE_ACCOUNT"
-

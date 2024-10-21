@@ -1,10 +1,4 @@
-# from json_repair import repair_json
-# from langgraph.prebuilt import ToolNode
-# from langchain.tools import tool
-# from langchain_core.runnables import Runnable, RunnableConfig
-# from langchain_core.prompts import ChatPromptTemplate
 from google.cloud import aiplatform
-# from langchain_google_vertexai import ChatVertexAI
 from vertexai.generative_models import (
     GenerationConfig,
     GenerativeModel,
@@ -20,9 +14,6 @@ import model_mgmt.primary as primary
 import model_mgmt.toolkit as toolkit
 import os
 import vertexai
-# import debugpy
-
-# debugpy.listen(5678)
 
 # flake8: noqa --E501
 
