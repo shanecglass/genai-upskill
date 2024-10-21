@@ -14,6 +14,10 @@ import modules
 import time
 import uuid
 import vertexai
+# import debugpy
+
+# debugpy.listen(5678)
+
 
 # flake8: noqa --E501
 
@@ -54,7 +58,6 @@ class Chat_State(TypedDict):
 
 
 def load(e: me.LoadEvent):
-    me.set_theme_mode("dark")
     vertexai.init(project=config.project_id, location=config.location)
     global chat_session
     chat_session = config.start_chat(generative_model)
@@ -62,7 +65,7 @@ def load(e: me.LoadEvent):
     yield
 
 @me.page(
-    on_load=load,
+    # on_load=load,
     security_policy=me.SecurityPolicy(
         allowed_iframe_parents=[
             "https://google.github.io", "https://huggingface.co"],
@@ -75,6 +78,7 @@ def load(e: me.LoadEvent):
 
 def page():
     state = me.state(State)
+
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)

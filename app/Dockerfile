@@ -1,5 +1,5 @@
 # Use an official lightweight Python image.
-FROM python:3.12.6-slim
+FROM python:3.12.7-slim
 
 RUN apt-get update && \
   apt-get install -y \
@@ -43,4 +43,4 @@ ENV PORT 8080
 # server, with one worker process and 8 threads. For environments
 # with multiple CPU cores, increase the number of workers to match
 # the number of cores available.
-CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 0 main:me
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 4 --threads 8 --timeout 0 main:me
