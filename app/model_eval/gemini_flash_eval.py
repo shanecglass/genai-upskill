@@ -14,6 +14,7 @@ from vertexai.generative_models import GenerativeModel
 
 from model_mgmt import testing, config, instructions, prompt
 import logging
+import os
 import pandas as pd
 import plotly.graph_objects as go
 import random
@@ -23,11 +24,17 @@ import vertexai
 
 # flake8: noqa --E501
 
-project_number = testing.project_number
-gemma_endpoint_id = testing.gemma_endpoint_id
-gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
-PROJECT_ID = testing.project_id
-LOCATION = testing.location
+# projectproject_number = os.environ.get("PROJECT_NUMBER")
+gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
+gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
+project_id = os.environ.get("PROJECT_ID")
+location = os.environ.get("LOCATION")
+
+PROJECT_ID = project_id
+LOCATION = location
+
+
+
 COMPUTATIONAL_EXPERIMENT_NAME = "flash-1.5-002-eval"
 POINTWISE_EXPERIMENT = "flash-1.5-002-pointwise-eval"
 

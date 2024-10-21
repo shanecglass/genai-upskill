@@ -16,8 +16,9 @@ from vertexai.generative_models import (
 import logging
 import model_mgmt.instructions as instructions
 import model_mgmt.primary as primary
-import model_mgmt.testing as testing
+# import model_mgmt.testing as testing
 import model_mgmt.toolkit as toolkit
+import os
 import vertexai
 # import debugpy
 
@@ -25,17 +26,17 @@ import vertexai
 
 # flake8: noqa --E501
 
-# project_number = os.environ.get("PROJECT_NUMBER")
-# gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
-# gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
-# project_id = os.environ.get("PROJECT_ID")
-# location = os.environ.get("LOCATION")
+project_number = os.environ.get("PROJECT_NUMBER")
+gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
+gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
+project_id = os.environ.get("PROJECT_ID")
+location = os.environ.get("LOCATION")
 
-project_number = testing.project_number
-gemma_endpoint_id = testing.gemma_endpoint_id
-gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
-project_id = testing.project_id
-location = testing.location
+# project_number = testing.project_number
+# gemma_endpoint_id = testing.gemma_endpoint_id
+# gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
+# project_id = testing.project_id
+# location = testing.location
 
 configured_model = primary.configured_model
 system_instructions = instructions.system_instructions

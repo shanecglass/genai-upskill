@@ -21,15 +21,12 @@ from vertexai.generative_models import (
 from vertexai.language_models import TextEmbeddingModel
 
 
-import model_mgmt.testing as testing
-project_id = testing.project_id
-location = testing.location
+# import model_mgmt.testing as testing
+# project_id = testing.project_id
+# location = testing.location
 
-
-# project_id = os.environ.get("PROJECT_ID")
-# location = os.environ.get("LOCATION")
-# project_id = "scg-l200-genai2"
-# location = "us-west1"
+project_id = os.environ.get("PROJECT_ID")
+location = os.environ.get("LOCATION")
 
 
 generation_config = GenerationConfig(
