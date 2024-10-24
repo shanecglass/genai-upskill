@@ -3,8 +3,8 @@ from langgraph.graph.message import add_messages
 from model_calls import ask_gemma, function_coordination
 from model_mgmt import config
 from operator import add
-from typing import Annotated, Literal, TypedDict, Literal
-from vertexai.generative_models import ChatSession
+from typing import Annotated, Literal, TypedDict
+from vertexai.generative_models import ChatSession, Content, Part
 
 import datetime
 
@@ -16,17 +16,16 @@ import uuid
 import vertexai
 
 
-
 # flake8: noqa --E501
 
 
 Role = Literal["user", "assistant"]
 Selected_Model = config.Selected_Model
-model_configs = config.model_to_call(Selected_Model)
 generative_model = config.generative_model
 endpoint_id = config.endpoint_id
 # tool_node = toolkit.tool_node
 session_id = str(uuid.uuid4())
+
 
 @dataclass(kw_only=True)
 class ChatMessage:
@@ -46,36 +45,39 @@ class State:
     reply_count: int = 0
     session_id: str = session_id
 
+
 class Chat_State(TypedDict):
     # Messages have the type "list". The `add_messages` function
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
-    # session: str = session_id
     messages: Annotated[list, add_messages]
-    chat_session: ChatSession = config.chat_session
+    chat_session: ChatSession = config.start_chat(generative_model)
+    user_email: str = ""
+    user_id: int = ""
 
 
-def on_load(e: me.LoadEvent):
-  vertexai.init(project=config.project_id, location=config.location)
-  global chat_session
-  chat_session = config.start_chat(generative_model)
-  Chat_State.chat_session = chat_session
-  yield
+# def on_load(e: me.LoadEvent):
+#     vertexai.init(project=config.project_id, location=config.location)
+#     global chat_session
+#     # welcome_message = "Welcome to TravelChat! Enter your email to get started"
+#     # output.append(ChatMessage(role=_ROLE_ASSISTANT,content=welcome_message))
+#     # chat_history = [Content(role=_ROLE_ASSISTANT,
+#     #                         parts=[Part.from_text(welcome_message)])]
+#     chat_session = config.start_chat(generative_model)
+#     Chat_State.chat_session = chat_session
+#     yield
 
 
 @me.page(
-    on_load=on_load,
+    # on_load=on_load,
     security_policy=me.SecurityPolicy(
         dangerously_disable_trusted_types=True
     ),
     path="/",
     title="TravelChat",
 )
-
-
 def page():
     state = me.state(State)
-
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)
@@ -92,7 +94,8 @@ def page():
                         )
                     with me.box(style=_make_chat_bubble_style(msg.role, msg.edited)):
                         if msg.role == _ROLE_USER:
-                            me.text(msg.content, style=_STYLE_CHAT_BUBBLE_PLAINTEXT)
+                            me.text(msg.content,
+                                    style=_STYLE_CHAT_BUBBLE_PLAINTEXT)
                         else:
                             me.markdown(msg.content)
                             with me.tooltip(message="Rewrite response"):
@@ -123,6 +126,7 @@ def page():
                 )
 # Event Handlers
 
+
 def on_chat_input(e: me.InputEvent):
     """Capture chat text input."""
     state = me.state(State)
@@ -135,6 +139,7 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
       return
     input = state.input
     state.input = ""
+
     yield
 
     submit_time = time.time()
@@ -175,7 +180,6 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     logging.info(f"PubSub message for reply successfully sent for message {
         state.reply_count} in session {state.session_id}")
 
-
     for content in output_message:
       assistant_message.content += content
       # TODO: 0.25 is an abitrary choice. In the future, consider making this adjustable.
@@ -186,6 +190,7 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     yield
 
 # Transform function for processing chat messages.
+
 
 def respond_to_chat(input: str, history: list[ChatMessage]):
     state = me.state(State)
@@ -200,38 +205,11 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         result = ask_gemma(full_input)
         return result
     else:
-        # Assemble prompt from chat history if selected model is Gemini Tuned or Gemini
-        # if state.reply_count == 0:
-        #     full_input = input
-        # else:
-        #
-        # full_input = "\n".join(message.content for message in history)
-        # full_input = f"{chat_history}\n{input}"
-        chat_session = Chat_State.chat_session
-        result = function_coordination(input, chat_session=chat_session)
+        result = function_coordination(input, Chat_State.chat_session)
         return result
 
-        # result = ask_gemini(full_input)
-        # input_message = {"messages": [HumanMessage(content=input)]}
-        # input_config = {"configurable": {"thread_id": session_id}}
-        # response = app.invoke(input_message, input_config)
-        # result = response["messages"][-1].content
-        # logging.info(f'Response to {input}: {result}')
-        # print(type(result))
-
-        # if type(result) is str:
-        #     result = result
-        #     return result
-        # else:
-        #     try:
-        #         result = str(result)
-        #         return result
-        #     except TypeError:
-        #         logging.info(f"Type Error occurred on final output to chat. {TypeError}")
-        #         return("Uh, that didn't go well. Try again!")
-
-
 # Constants
+
 
 _TITLE = "TravelChat"
 
@@ -256,7 +234,11 @@ _DEFAULT_BORDER_SIDE = me.BorderSide(
 
 _LABEL_BUTTON = "send"
 _LABEL_BUTTON_IN_PROGRESS = "pending"
-_LABEL_INPUT = "Where would you like to travel?"
+if State.message_count == 0:
+    _LABEL_INPUT = "Welcome to TravelChat! Enter your email to get started"
+else:
+    _LABEL_INPUT = "Let's hit the skies!"
+
 
 _STYLE_INPUT_WIDTH = me.Style(width="100%")
 
@@ -294,7 +276,9 @@ _STYLE_CHAT_BUBBLE_NAME = me.Style(
     font_size="12px",
     padding=me.Padding(left=15, right=15, bottom=5),
 )
-_STYLE_CHAT_BUBBLE_PLAINTEXT = me.Style(margin=me.Margin.symmetric(vertical=15))
+_STYLE_CHAT_BUBBLE_PLAINTEXT = me.Style(
+    margin=me.Margin.symmetric(vertical=15))
+
 
 def _make_style_chat_bubble_wrapper(role: Role) -> me.Style:
     """Generates styles for chat bubble position.
@@ -337,6 +321,7 @@ def _make_chat_bubble_style(role: Role, edited: bool) -> me.Style:
             bottom=_DEFAULT_BORDER_SIDE,
         ),
     )
+
 
 def _display_username(username: str, edited: bool = False) -> str:
     """Displays the username

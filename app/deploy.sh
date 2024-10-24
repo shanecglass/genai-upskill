@@ -10,7 +10,7 @@ IMG_TAG="$LOCATION-docker.pkg.dev/$PROJ/l200-genai-upskill/travel-chatbot-$WEEK"
 gcloud run deploy "travel-chatbot-$WEEK"  \
     --project "$PROJ"    \
     --set-env-vars "LOCATION=$LOCATION, PROJECT_NUMBER=$PROJ_NUMBER, PROJECT_ID=$PROJ"     \
-    --set-secrets "GEMMA_ENDPOINT_ID=projects/$PROJ_NUMBER/secrets/travelbot-endpoint-id:1, GEMINI_TUNED_ENDPOINT_ID=projects/$PROJ_NUMBER/secrets/gemini-finetuned-endpoint-id:2"     \
+    --set-secrets "GEMMA_ENDPOINT_ID=projects/$PROJ_NUMBER/secrets/travelbot-endpoint-id:1, GEMINI_TUNED_ENDPOINT_ID]]=projects/$PROJ_NUMBER/secrets/gemini-finetuned-endpoint-id:2"     \
     --image "$IMG_TAG:latest"    \
     --platform "managed"  \
     --port 8080           \

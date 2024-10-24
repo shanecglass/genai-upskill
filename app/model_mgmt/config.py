@@ -1,3 +1,4 @@
+import testing as testing
 from google.cloud import aiplatform
 from vertexai.generative_models import (
     GenerationConfig,
@@ -17,17 +18,21 @@ import vertexai
 
 # flake8: noqa --E501
 
-project_number = os.environ.get("PROJECT_NUMBER")
-gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
-gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
-project_id = os.environ.get("PROJECT_ID")
-location = os.environ.get("LOCATION")
+# project_number = os.environ.get("PROJECT_NUMBER")
+# gemma_endpoint_id = os.environ.get("GEMMA_ENDPOINT_ID")
+# gemini_tuned_endpoint_id = os.environ.get("GEMINI_TUNED_ENDPOINT_ID")
+# project_id = os.environ.get("PROJECT_ID")
+# location = os.environ.get("LOCATION")
 
-# project_number = testing.project_number
-# gemma_endpoint_id = testing.gemma_endpoint_id
-# gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
-# project_id = testing.project_id
-# location = testing.location
+import os
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+project_number = testing.project_number
+gemma_endpoint_id = testing.gemma_endpoint_id
+gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
+project_id = testing.project_id
+location = testing.location
 
 configured_model = primary.configured_model
 system_instructions = instructions.system_instructions
@@ -142,13 +147,13 @@ endpoint_id = model_to_call(Selected_Model)[1]
 model_name = model_to_call(Selected_Model)[2]
 
 
-def start_chat(model=generative_model):
-    chat_session = model.start_chat()
-    system_message = system_instructions
+def start_chat(model=generative_model, history=None):
+    if history is None:
+        chat_session = model.start_chat()
+    else:
+        chat_session = model.start_chat(history=history)
+    # system_message = system_instructions
     # for x in instructions.system_instructions:
     #     system_message += x.join(" ")
-    chat_session.send_message(system_message)
+    # chat_session.send_message(system_message)
     return chat_session
-
-
-chat_session = start_chat()
