@@ -1,16 +1,21 @@
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
 from model_mgmt import config, instructions, prompt, toolkit
-from typing import Annotated, TypedDict
+
+from json_repair import repair_json
 from vertexai.generative_models import Content, Part, ChatSession
 
+import logging
 import json
+
 
 project_id = config.project_id
 location = config.location
 project_number = config.project_number
+
 model_to_call = config.generative_model
 endpoint_id = config.endpoint_id
+
 
 # flake8: noqa --E501
 
@@ -50,66 +55,103 @@ def ask_gemma(
     return (response.predictions[0])
 
 
+# def ask_gemini(
+#         input: str,
+#         function_response: bool = False,
+# ):
+#     # vertexai.init(project=project_id, location=location)
+#     if function_response is True:
+#         complete_prompt = input
+#     else:
+#         complete_prompt = prompt.generate_template(input)
+
+#     contents = [complete_prompt]
+#     response = model_to_call.generate_content(contents)
+#     return response
+
+
 def get_chat_response(
         input: str,
         chat_session: ChatSession,
         function_response: bool = False,
 ) -> str:
+
     if function_response is True:
-        contents = input
+        complete_prompt = input
+        contents = complete_prompt
     else:
         complete_prompt = prompt.generate_template(input)
-        contents = Content(role="user", parts=[
-                           Part.from_text(text=complete_prompt)])
+        contents = [complete_prompt]
 
     response = chat_session.send_message(contents, stream=False)
     return response
 
 
-def parse_preferences_func(
+# def extract_from_input(func_output, func_response):
+#     text_response = parse_hotel_func(
+#         func_output, func_response)
+#     return text_response
+
+def parse_hotel_func(
     input_text,  # Original user input
     func_output,
-    func_response,
     chat_session: ChatSession,
 ):
-    print(func_output)
-    User_Email = func_output["User_Email"]
-    full_text_input = prompt.generate_template(input_text)
-    if User_Email in (' ', '', None):
-        # Proceed with original input
-        contents = Content(parts=[Part.from_text(full_text_input)])
-    else:
-        user_preferences = toolkit.get_user_preferences(user_email=User_Email)
-        user_preferences_json = json.loads(user_preferences)
+    # Extract arguments from the initial function call (if present).
+    try:
+       print(func_output)
+       user_destination = func_output["User_Destination"]
+       points_of_interest = func_output["Points_of_Interest"]
+
+    # No function call yet. Extract Destination & POI from text
+    except (IndexError, json.JSONDecodeError):
+       # Add this function to toolkit.py
+       parsed = toolkit.parse_input(user_input=input_text)
+       user_destination = parsed["User_Destination"]
+       points_of_interest = parsed["Points_of_Interest"]
+       print(user_destination)
+       print(points_of_interest)
+
+    if user_destination == "Florence, Italy":
+        hotel_details_json = toolkit.hotel_search(pois=points_of_interest)
+        hotel_details = json.loads(hotel_details_json)
+
         function_response_part = Part.from_function_response(
-            name="get_user_info",
+            name="hotel_search",
             response={
-                "content": user_preferences_json,
+                "content": hotel_details
             }
         )
-        contents = [
-            function_response_part
-        ]
+        complete_prompt = Part.from_text(prompt.generate_template(input_text))
+        contents = Content(role="user", parts=[
+            complete_prompt, function_response_part])
+    else:
+        # Proceed with original input
+        contents = Content(parts=[Part.from_text(input_text)])
+
     response = get_chat_response(
-        contents, chat_session, function_response=True)
+        contents, chat_session=chat_session, function_response=True)
     return response.candidates[0]
 
-
+# I need to update this function to handle multiple function requests by the model in the same turn
+# Something like this: https://www.googlecloudcommunity.com/gc/AI-ML/Gemini-1-5-parallel-function-calls/m-p/770208#M7966
+# Or like this: https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/function-calling#parallel-samples
 def function_coordination(input: str, chat_session: ChatSession) -> str:
-    input = input.strip()
-    output = get_chat_response(input, chat_session)
+    full_input = prompt.generate_template(input).strip()
+    user_input_content = Content(
+        role="user", parts=[Part.from_text(text=full_input)])
+    output = chat_session.send_message(user_input_content, stream=False)
 
     if isinstance(output.candidates, list):
         output_candidate = output.candidates[0]
 
         for function_call in output_candidate.function_calls:
-            if function_call.name == "get_user_preferences":
-                print("get_user_preferences function call found")
+            if (function_call.name == "hotel_search", function_call.args["User_Destination"] == "Florence, Italy", ):
                 func_output = function_call.args
-                response = parse_preferences_func(
-                    input, func_output, output_candidate.content, chat_session
+                print("hotel_search function call found")
+                response = parse_hotel_func(
+                    full_input, func_output, output_candidate.content, chat_session=chat_session
                 )
                 return response.text
 
-    # Default to returning the text if no get_user_preferences call
-    return output_candidate.text
+    return output_candidate.text  # Default to returning the text if no hotel_search call

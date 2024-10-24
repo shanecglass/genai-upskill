@@ -4,7 +4,6 @@ google-cloud-pubsub == 2.26.0
 google-cloud-storage == 2.18.2
 gunicorn == 23.0.0
 json_repair == 0.30.0
-langchain
 langchain_core == 0.3.10
 langgraph == 0.2.35
 mesop == 0.12.7
