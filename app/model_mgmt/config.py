@@ -79,7 +79,7 @@ Selected_Model = model_check()
 
 
 gen_config = {
-    "temperature": 0.0,
+    "temperature": 0.2,
     "top_p": .1,
     "top_k": 1,
     "candidate_count": 1,
@@ -147,13 +147,12 @@ endpoint_id = model_to_call(Selected_Model)[1]
 model_name = model_to_call(Selected_Model)[2]
 
 
-def start_chat(model=generative_model, history=None):
-    if history is None:
-        chat_session = model.start_chat()
-    else:
-        chat_session = model.start_chat(history=history)
-    # system_message = system_instructions
-    # for x in instructions.system_instructions:
-    #     system_message += x.join(" ")
-    # chat_session.send_message(system_message)
-    return chat_session
+# def start_chat(model=generative_model, history=None):
+#     if history is None:
+#         chat_session = model.start_chat()
+#     else:
+#         chat_session = model.start_chat(history=history)
+#     return chat_session
+
+
+

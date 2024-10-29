@@ -51,25 +51,11 @@ class Chat_State(TypedDict):
     # in the annotation defines how this state key should be updated
     # (in this case, it appends messages to the list, rather than overwriting them)
     messages: Annotated[list, add_messages]
-    chat_session: ChatSession = config.start_chat(generative_model)
     user_email: str = ""
     user_id: int = ""
 
 
-# def on_load(e: me.LoadEvent):
-#     vertexai.init(project=config.project_id, location=config.location)
-#     global chat_session
-#     # welcome_message = "Welcome to TravelChat! Enter your email to get started"
-#     # output.append(ChatMessage(role=_ROLE_ASSISTANT,content=welcome_message))
-#     # chat_history = [Content(role=_ROLE_ASSISTANT,
-#     #                         parts=[Part.from_text(welcome_message)])]
-#     chat_session = config.start_chat(generative_model)
-#     Chat_State.chat_session = chat_session
-#     yield
-
-
 @me.page(
-    # on_load=on_load,
     security_policy=me.SecurityPolicy(
         dangerously_disable_trusted_types=True
     ),
@@ -78,6 +64,9 @@ class Chat_State(TypedDict):
 )
 def page():
     state = me.state(State)
+    global chat_session
+    # Initialize chat session
+    chat_session = generative_model.start_chat(response_validation=False)
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)
@@ -162,7 +151,14 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     yield
 
     start_time = time.time()
-    output_message = respond_to_chat(input, state.output)
+    output_message, public_url = respond_to_chat(input, state.output)
+    if public_url is not None:
+      output_message = output_message + "\n" + public_url
+      me.image(
+          src=public_url,
+          alt="Grapefruit",
+          style=me.Style(width="100%"),
+      )
     assistant_message = ChatMessage(role=_ROLE_ASSISTANT)
     output.append(assistant_message)
     state.output = output
@@ -205,8 +201,8 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         result = ask_gemma(full_input)
         return result
     else:
-        result = function_coordination(input, Chat_State.chat_session)
-        return result
+        result, public_url = function_coordination(input, chat_session)
+        return result, public_url
 
 # Constants
 
@@ -218,7 +214,6 @@ _ROLE_ASSISTANT = "assistant"
 _ROLE_SYSTEM = "system"
 
 _BOT_USER_DEFAULT = "travelchat-bot"
-
 
 # Styles
 

@@ -83,8 +83,11 @@ def publish_reply_pubsub(
         reply_count,
         session_id,
         time_to_reply):
-    reply_text = reply_text.replace("\n", " ").replace(
-        "  ", " ").replace("*", "").strip()
+    if reply_text is None:
+        reply_text = "No reply. Potentially a function call instead"
+    else:
+        reply_text = reply_text.replace("\n", " ").replace(
+            "  ", " ").replace("*", "").strip()
     reply_embed = json.dumps(get_text_embeddings(reply_text))
     dict = {"reply_text": reply_text,
             "reply_embedding": reply_embed,
