@@ -217,6 +217,7 @@ def image_search_attractions(user_destination, pois):
         attraction_image_dict = bpd.read_gbq(
             attraction_image_query).to_dict(orient="records")[0]
         attraction_image = attraction_image_dict["poi_uri"]
+        print(attraction_image)
         if attraction_image not in ("", None):
             log_text = f"Attraction image found. URI: {attraction_image}"
             logging.info(log_text)
@@ -284,6 +285,7 @@ def doc_search_attractions(user_destination, pois):
         doc_search_dict = bpd.read_gbq(
             doc_search_query).to_dict(orient="records")[0]
         doc_search = doc_search_dict["content"]
+        print(doc_search)
         if doc_search not in ("", None):
             log_text = "Doc text found found"
             logging.info(log_text)

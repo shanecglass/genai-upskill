@@ -195,15 +195,15 @@ def parse_attraction_images(
     if user_destination == "Florence, Italy":
         poi_image_uri = toolkit.image_search_attractions(
             user_destination=user_destination, pois=points_of_interest)
-
+        public_url = poi_image_uri.replace(
+            "gs://", "https://storage.googleapis.com/")
         function_response_part = Part.from_function_response(
             name="image_search_attractions",
-            response={"content": poi_image_uri},
+            response={"content": public_url},
         )
         # complete_prompt = Part.from_text(input_text)
         output = function_response_part
-        public_url = poi_image_uri.replace(
-            "gs://", "https://storage.googleapis.com/")
+
     else:
         # Proceed with original input
         output = Part.from_text(input_text)
