@@ -1,9 +1,26 @@
+from langchain.agents.format_scratchpad.tools import format_to_tool_messages
+from langchain_core.prompts import ChatPromptTemplate
 from google.protobuf import json_format
 from google.protobuf.struct_pb2 import Value
 from model_mgmt import config, instructions, prompt, toolkit
 
 from json_repair import repair_json
 from vertexai.generative_models import Content, GenerationResponse, Part, ChatSession
+from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod, NodeStyles
+
+from langgraph.graph import StateGraph, START, END, MessageGraph, MessagesState
+from langgraph.prebuilt import ToolNode
+from langgraph.prebuilt import create_react_agent
+from vertexai.preview import reasoning_engines
+
+from PIL import Image
+# from IPython.display import Image, display
+
+
+from langchain_core.runnables.graph import CurveStyle, MermaidDrawMethod, NodeStyles
+
+
 
 import logging
 from typing import Any
@@ -211,10 +228,44 @@ def parse_attraction_images(
     return output, public_url
 
 
+def parse_weather_check(
+    input_text,  # Original user input
+    func_output,
+    chat_session
+):
+    # Extract arguments from the initial function call (if present).
+    try:
+       print(func_output)
+       user_destination = func_output["user_destination"]
+
+    # No function call yet. Extract Destination & POI from text
+    except (IndexError, json.JSONDecodeError):
+       # Add this function to toolkit.py
+       parsed = toolkit.parse_input(user_input=input_text)
+       user_destination = parsed["user_destination"]
+       print(user_destination)
+
+    current_weather = toolkit.weather_check(
+        user_destination=user_destination)
+
+    function_response_part = Part.from_function_response(
+        name="weather_check",
+        response={"content": current_weather},
+    )
+    output = function_response_part
+
+    return output
+
+
+# TODO: Spend <4 hours converting this to use either:
+# LangChain: https://www.googlecloudcommunity.com/gc/Community-Blogs/Building-and-Deploying-AI-Agents-with-LangChain-on-Vertex-AI/ba-p/748929
+# Vertex Reasoning Agent: https://github.com/GoogleCloudPlatform/generative-ai/blob/main/gemini/reasoning-engine/intro_reasoning_engine.ipynb
+# Maybe Langgraph but start from scratch: https://langchain-ai.github.io/langgraph/how-tos/tool-calling/#react-agent
 def function_coordination(input: str, chat_session) -> str:
     full_input = prompt.generate_template(input).strip()
+    input_part = Part.from_text(text=full_input)
     user_input_content = Content(
-        role="user", parts=[Part.from_text(text=full_input)])
+        role="user", parts=[input_part])
     output = get_chat_response(user_input_content, chat_session)
     public_url = None
 
@@ -224,21 +275,19 @@ def function_coordination(input: str, chat_session) -> str:
             text_response = output_candidate.text
         else:
             function_responses = []
-            function_responses.append(Part.from_text(text=full_input))
+            function_responses.append(input_part)
             for function_call in output_candidate.function_calls:
                 if function_call.name == "hotel_search":
                     print("hotel_search function call found")
                     func_output = function_call.args
                     response = parse_hotel_func(
-                        full_input, func_output, chat_session=chat_session
-                    )
-                    # Collect function response parts
+                        full_input, func_output, chat_session)
                     function_responses.append(response)
                 elif function_call.name == "parse_input":
                     print("parse_input function call found")
                     func_output = function_call.args
                     response = parse_input_func(
-                        full_input, func_output, chat_session=chat_session)
+                        full_input, func_output, chat_session)
                     # Collect function response parts
                     function_responses.append(response)
                 elif function_call.name == "image_search_attractions":
@@ -253,11 +302,17 @@ def function_coordination(input: str, chat_session) -> str:
                     response = parse_doc_attractions(
                         full_input, func_output, chat_session)
                     function_responses.append(response)
-
+                elif function_call.name == "weather_check":
+                    print("weather_check function call found")
+                    func_output = function_call.args
+                    response = parse_weather_check(
+                        full_input, func_output, chat_session)
+                    function_responses.append(response)
             # Create Content with function_responses
             if function_responses:
                 # Send function responses in a single turn
-                function_response_content = Content(parts=function_responses)
+                function_response_content = Content(
+                    parts=function_responses)
                 response = get_chat_response(
                     function_response_content, chat_session=chat_session)
                 text_response = response.candidates[0].text
@@ -267,6 +322,89 @@ def function_coordination(input: str, chat_session) -> str:
         text_response = output_candidate.text
 
     return text_response, public_url
+
+
+# react_agent = create_react_agent(
+#     model=config.agent_chat_session,
+#     tools=toolkit.florence_tool_list
+# )
+
+prompt_template = {
+    "user_input": lambda x: x["input"],
+    "agent_scratchpad": lambda x: format_to_tool_messages(x["intermediate_steps"]),
+} | ChatPromptTemplate.from_messages([
+    ("system", instructions.system_instructions),
+    ("placeholder", "{history}"),
+    ("user", "{user_input}"),
+    ("placeholder", "{agent_scratchpad}"),
+])
+
+
+react_agent = reasoning_engines.LangchainAgent(
+    model=config.model_name,
+    prompt=prompt_template,
+    tools=toolkit.florence_tool_list,
+)
+
+# img = react_agent.get_graph().draw_mermaid_png(
+#     draw_method=MermaidDrawMethod.API,
+# )
+# with open("agent_graph.png", "wb") as f:
+#     f.write(img)
+
+
+# def router(state: MessagesState) -> str:
+#     messages = state["messages"]
+#     last_message = messages[-1]
+#     if last_message.tool_calls:
+#         return "tools"
+#     else:
+#         return END
+
+
+# class LangGraphApp:
+#     def __init__(self, chat_session, project_id: str = project_id, location: str = location) -> None:
+#         self.project_id = project_id
+#         self.location = location
+#         self.chat_session = chat_session
+
+#     # The set_up method is used to define application initialization logic
+#     def set_up(self) -> None:
+
+#         builder = MessageGraph()
+#         model_with_tools = self.chat_session
+#         builder.add_node("tools", model_with_tools)
+
+#         florence_tool_node = toolkit.florence_tool_node
+#         # weather_tool_node = toolkit.weather_tool_node
+#         builder.add_node("florence_trip_planning", florence_tool_node)
+#         # builder.add_node("weather_check", weather_tool_node)
+#         builder.add_edge("florence_trip_planning", END)
+#         # builder.add_edge("weather_check", END)
+
+#         builder.set_entry_point("tools")
+#         builder.add_conditional_edges("tools", router)
+
+#         self.runnable = builder.compile()
+
+#     # The query method will be used to send inputs to the agent
+#     def query(self, input: str):
+#         """Query the application.
+
+#         Args:
+#             input: The user message.
+
+#         Returns:
+#             str: The LLM response.
+#         """
+#         chat_history = self.runnable.invoke(
+#             HumanMessage(prompt.generate_template(input)))
+
+#         return chat_history[-1].content
+
+
+# agent = LangGraphApp(config.agent_chat_session)
+# agent.set
 
 
 # def ask_gemini(

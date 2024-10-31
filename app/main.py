@@ -1,11 +1,16 @@
 from dataclasses import dataclass
 from langgraph.graph.message import add_messages
-from model_calls import ask_gemma, function_coordination
+from model_calls import (
+    ask_gemma,
+    # function_coordination,
+    # LangGraphApp,
+    react_agent
+)
 from model_mgmt import config
 from operator import add
 from typing import Annotated, Literal, TypedDict
 from vertexai.generative_models import ChatSession, Content, Part
-
+from model_mgmt import prompt
 import datetime
 
 import logging
@@ -67,6 +72,10 @@ def page():
     global chat_session
     # Initialize chat session
     chat_session = generative_model.start_chat(response_validation=False)
+    # global agent
+    react_agent.set_up()
+    # agent = LangGraphApp(config.agent_chat_session)
+    # agent.set_up()
     # Chat UI
     with me.box(style=_STYLE_APP_CONTAINER):
         me.text(_TITLE, type="headline-5", style=_STYLE_TITLE)
@@ -137,10 +146,10 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     logging.info(f"User message submitted as: {
                  input} at time: {submit_time_human}")
     state.message_count = state.message_count + 1
-    modules.publish_message_pubsub(
-        input, submit_time_bq_format, state.message_count, state.session_id)
-    logging.info(f"PubSub message for user message successfully sent for message {
-                 state.message_count} in session {state.session_id}")
+    # modules.publish_message_pubsub(
+    #     input, submit_time_bq_format, state.message_count, state.session_id)
+    # logging.info(f"PubSub message for user message successfully sent for message {
+    #  state.message_count} in session {state.session_id}")
 
     output = state.output
     if output is None:
@@ -171,10 +180,10 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
     logging.info(f"Model PubSub message sent as: {
         output_message} at time: {reply_time_human}")
     logging.info(f"Response time in seconds: {response_time}")
-    modules.publish_reply_pubsub(
-        output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
-    logging.info(f"PubSub message for reply successfully sent for message {
-        state.reply_count} in session {state.session_id}")
+    # modules.publish_reply_pubsub(
+    #     output_message, reply_time_bq_format, state.reply_count, state.session_id, response_time)
+    # logging.info(f"PubSub message for reply successfully sent for message {
+    #     state.reply_count} in session {state.session_id}")
 
     for content in output_message:
       assistant_message.content += content
@@ -188,6 +197,15 @@ def on_click_submit_chat_msg(e: me.ClickEvent | me.InputEnterEvent):
 # Transform function for processing chat messages.
 
 
+def print_stream(stream):
+    for s in stream:
+        message = s["messages"][-1]
+        if isinstance(message, tuple):
+            print(message)
+        else:
+            message.pretty_print()
+
+
 def respond_to_chat(input: str, history: list[ChatMessage]):
     state = me.state(State)
     chat_history = ""
@@ -199,10 +217,18 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
         full_input = f"{chat_history}\n{input}"
 
         result = ask_gemma(full_input)
-        return result
+        public_url = None
     else:
-        result, public_url = function_coordination(input, chat_session)
-        return result, public_url
+        full_input = prompt.generate_template(input)
+
+        message = {"messages": [("user", full_input)]}
+        result = react_agent.query(input=full_input)
+        # print_stream(result)
+        # result = react_agent.invoke(message)
+        public_url = None
+        # result, public_url = function_coordination(input, chat_session)
+
+        return result["output"], public_url
 
 # Constants
 

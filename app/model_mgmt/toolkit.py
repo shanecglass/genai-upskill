@@ -1,23 +1,28 @@
 # flake8: noqa --E501
 
 
+
 import bigframes
+
 import bigframes.pandas as bpd
+import googlemaps
 import logging
 import json
-import os
+import pandas as pd
+import requests
+# from langchain_core.tools import tool
 
-from google.cloud import bigquery
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable, RunnableConfig
-from langchain.tools import tool
 from langgraph.prebuilt import ToolNode
+
+
+from google.cloud import bigquery, secretmanager
+from langchain.tools import tool
 from json_repair import repair_json
+from retry_requests import retry
 from vertexai.generative_models import (
     FunctionDeclaration,
     GenerationConfig,
     GenerativeModel,
-    grounding,
     Tool
 )
 from vertexai.language_models import TextEmbeddingModel
@@ -50,7 +55,7 @@ model = GenerativeModel(
 )
 
 
-def get_text_embeddings(text_input):
+def get_text_embeddings(text_input: str):
     text_embed_model = TextEmbeddingModel.from_pretrained(
         "textembedding-gecko@003")
     # text_embeddings = text_embed_model.get_embeddings([text_input])
@@ -60,7 +65,7 @@ def get_text_embeddings(text_input):
     return vector
 
 
-def get_multimodal_embeddings(input, dimension: int | None = 1408, img=None) -> list[float]:
+def get_multimodal_embeddings(input: str, dimension: int | None = 1408, img: str = None) -> list[float]:
     mm_embed_model = MultiModalEmbeddingModel.from_pretrained(
         "multimodalembedding@001")
     text_input = " ".join(input)
@@ -72,16 +77,30 @@ def get_multimodal_embeddings(input, dimension: int | None = 1408, img=None) -> 
     return embedding.text_embedding
 
 
-# @tool
-def parse_input(user_input: str):
+def get_gmaps_key(secret_id: str, version_id: str = "latest"):
+    # Create the Secret Manager client.
+    client = secretmanager.SecretManagerServiceClient()
+
+    # Build the resource name of the secret version.
+    name = f"projects/{project_id}/secrets/{secret_id}/versions/{version_id}"
+
+    # Access the secret version.
+    response = client.access_secret_version(name=name)
+
+    # Return the decoded payload.
+    return response.payload.data.decode('UTF-8')
+
+
+@tool
+def parse_input(user_input: str) -> json:
     """
     Determine the user_destination and points_of_interest
 
     Args:
-        user_input: User's request
+        user_input (str): User's request
 
     Returns:
-        A JSON object with user_destination, points_of_interest, and user_interests
+        json: A JSON object with user_destination, points_of_interest, and user_interests
     """
     prompt_template = f"""
         Extract the user_destination (city, country), points_of_interest (list of places), and user_interests from the User_Request.
@@ -113,17 +132,17 @@ def parse_input(user_input: str):
     return cleaned_response
 
 
-# @tool
-def hotel_search(user_destination, pois):
+@tool
+def hotel_search(user_destination: str, pois: list[str]) -> json:
     """
     Find a hotel near the user's points_of_interest in Florence, Italy
 
     Args:
-        user_destination: The user's requested travel destination
-        pois: A string containing a comma-separated list of points_of_interest
+        user_destination (str): The user's requested travel destination
+        pois (list[str]): A string containing a comma-separated list of points_of_interest
 
     Returns:
-        A JSON object with the name, description, and address of the recommended hotel
+       json: A JSON object with the name, description, and address of the recommended hotel
     """
     client = bigquery.Client()
     if user_destination == "Florence, Italy":
@@ -170,16 +189,17 @@ def hotel_search(user_destination, pois):
     return hotel_json
 
 
-def image_search_attractions(user_destination, pois):
+@tool
+def image_search_attractions(user_destination: str, pois: list[str]) -> json:
     """
     Find images of the user's points_of_interest in Florence, Italy
 
     Args:
-        user_destination: The user's requested travel destination
-        pois: An array of strings containing a comma-separated list of points_of_interest
+        user_destination (str) : The user's requested travel destination
+        pois (list[str]): An array of strings containing a comma-separated list of points_of_interest
 
     Returns:
-        A JSON object with a GCS URI for an image of the user's points_of_interest
+        json: A JSON object with a GCS URI for an image of the user's points_of_interest
     """
     client = bigquery.Client()
     if user_destination == "Florence, Italy":
@@ -228,16 +248,17 @@ def image_search_attractions(user_destination, pois):
     return attraction_image
 
 
-def doc_search_attractions(user_destination, pois):
+@tool
+def doc_search_attractions(user_destination: str, pois: list[str]) -> json:
     """
     Find suggested activities and experiences near the user's points_of_interest in Florence, Italy
 
     Args:
-        user_destination: The user's requested travel destination
-        pois: An array of strings containing a comma-separated list of points_of_interest
+        user_destination str: The user's requested travel destination
+        pois list[str]: An array of strings containing a comma-separated list of points_of_interest
 
     Returns:
-        A JSON object with a string describing popular activities and experiences near the user's points_of_interest
+        json: A JSON object with a string describing popular activities and experiences near the user's points_of_interest
     """
     client = bigquery.Client()
     if user_destination == "Florence, Italy":
@@ -295,6 +316,45 @@ def doc_search_attractions(user_destination, pois):
             doc_search = None
     return doc_search
 
+
+@tool
+def weather_check(user_destination: str) -> json:
+    """
+    Find current weather conditions for a given destination.
+
+    Args:
+        user_destination: The user's requested destination in the format "City, Country".
+
+    Returns:
+        A JSON object with temperature, precipitation_probability, and wind_speed
+    """
+    gmaps = googlemaps.Client(key=get_gmaps_key("maps_api_key"))
+    geocode_result = gmaps.geocode(user_destination)
+    lat = geocode_result[0]["geometry"]["location"]["lat"]
+    lon = geocode_result[0]["geometry"]["location"]["lng"]
+    print("Destination: {user_destination}. Lat/lon: {lat}, {lon}")
+
+    url = f"https://api.open-meteo.com/v1/forecast"
+    # Set up the parameters for the API request
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "current": ["temperature_2m", "precipitation", "wind_speed_10m"],
+        "temperature_unit": "fahrenheit",
+        "wind_speed_unit": "mph",
+        "precipitation_unit": "inch"
+    }
+
+    response_json = requests.get(url, params=params).json()
+    current = response_json['current']
+    print(current)
+    current_weather_dict = {
+        "temperature": current['temperature_2m'],
+        "precipitation": current['precipitation'],
+        "wind_speed": current['wind_speed_10m']
+    }
+    print("current weather in {user_destination} is: {current_weather_dict}")
+    return current_weather_dict
 
 
 parse_input_func = FunctionDeclaration(
@@ -377,16 +437,61 @@ doc_search_attractions_func = FunctionDeclaration(
     },
 )
 
-tool_list = [
+weather_check_func = FunctionDeclaration(
+    name="weather_check",
+    description="""
+    Find current weather conditions for a given destination.
+
+    Args:
+        user_destination: The user's requested destination in the format "City, Country".
+
+    Returns:
+        A JSON object of the current weather, with temperature in fahrenheit, precipitation in inches, and wind_speed in mph
+    """,
+    parameters={
+        "type": "object",
+        "properties": {
+            "user_destination": {"type": "string", "description": "Destination in the format City, Country the user wants to plan a trip for"},
+        },
+        "required": ["user_destination"],
+    },
+)
+
+florence_tool_list = [
+    parse_input,
+    hotel_search,
+    # image_search_attractions,
+    doc_search_attractions,
+    weather_check
+]
+
+florence_gemini_tool_list = [
     parse_input_func,
     hotel_search_func,
     image_search_attractions_func,
-    doc_search_attractions_func
+    doc_search_attractions_func,
+    weather_check_func
 ]
 
-tools = Tool(
-    function_declarations=tool_list
+florence_gemini_tools = Tool(
+    function_declarations=florence_gemini_tool_list
 )
 
+# weather_tool_list = [
+#     parse_input_func,
+#     weather_check_func,
+# ]
 
-# tool_node = ToolNode(tools)
+# weather_tools = Tool(
+#     function_declarations=weather_tool_list
+# )
+
+all_tools = []
+for tool in florence_tool_list:
+    all_tools.append(tool)
+# for tool in weather_tool_list:
+#     all_tools.append(tool)
+
+
+# florence_tool_node = ToolNode(florence_tool_list)
+# weather_tool_node = ToolNode(weather_tool_list)

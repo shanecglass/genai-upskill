@@ -7,6 +7,13 @@ from vertexai.generative_models import (
     HarmBlockThreshold,
     ToolConfig
 )
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.tools import tool
+from langchain_google_vertexai import ChatVertexAI
+from langgraph.graph import END, MessageGraph
+from langgraph.prebuilt import ToolNode
+from vertexai.preview import reasoning_engines
+
 
 import logging
 import model_mgmt.instructions as instructions
@@ -28,6 +35,7 @@ import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+
 project_number = testing.project_number
 gemma_endpoint_id = testing.gemma_endpoint_id
 gemini_tuned_endpoint_id = testing.gemini_tuned_endpoint_id
@@ -36,6 +44,7 @@ location = testing.location
 
 configured_model = primary.configured_model
 system_instructions = instructions.system_instructions
+vertexai.init(project=project_id, location=location)
 
 Valid_Models = {
     # Define the list of valid models.
@@ -119,7 +128,6 @@ def model_to_call(Selected_Model=Selected_Model):
         )
         endpoint_id = gemma_endpoint_id
     else:
-        vertexai.init(project=project_id, location=location)
         if Selected_Model == Valid_Models['GEMINI_FLASH']:
             model_id = Selected_Model
         else:
@@ -129,7 +137,7 @@ def model_to_call(Selected_Model=Selected_Model):
             generation_config=generation_config,
             # safety_settings=safety_settings,
             system_instruction=instructions.system_instructions,
-            tools=[toolkit.tools],
+            tools=[toolkit.florence_gemini_tools],
             tool_config=ToolConfig(
                 function_calling_config=ToolConfig.FunctionCallingConfig(
                     # ANY mode forces the model to predict only function calls
@@ -145,6 +153,22 @@ def model_to_call(Selected_Model=Selected_Model):
 generative_model = model_to_call(Selected_Model)[0]
 endpoint_id = model_to_call(Selected_Model)[1]
 model_name = model_to_call(Selected_Model)[2]
+
+
+def agent_model_to_call(project_id: str = project_id, location: str = location, model_name: str = model_name):
+    model = ChatVertexAI(
+        model=model_name,
+        temperature=gen_config["temperature"],
+        safety_settings=safety_settings,
+        max_output_tokens=gen_config["max_output_tokens"],
+        project=project_id,
+        location=location,
+    )
+    return model
+
+
+agent_chat_session = agent_model_to_call()
+
 
 
 # def start_chat(model=generative_model, history=None):
