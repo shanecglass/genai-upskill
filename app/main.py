@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 from langgraph.graph.message import add_messages
+from llm_guard.output_scanners import Toxicity
+from llm_guard.output_scanners.toxicity import MatchType
+
 from model_calls import (
     ask_gemma,
     # function_coordination,
@@ -223,12 +226,17 @@ def respond_to_chat(input: str, history: list[ChatMessage]):
 
         message = {"messages": [("user", full_input)]}
         result = react_agent.query(input=full_input)
+        scanner = Toxicity(threshold=0.5, match_type=MatchType.SENTENCE)
+        sanitized_output, is_valid, risk_score = scanner.scan(
+            full_input, result['output'])
+        print(sanitized_output)
+
         # print_stream(result)
         # result = react_agent.invoke(message)
         public_url = None
         # result, public_url = function_coordination(input, chat_session)
 
-        return result["output"], public_url
+        return sanitized_output, public_url
 
 # Constants
 
